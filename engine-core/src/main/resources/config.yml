@@ -1,11 +1,7 @@
 # PvP Engine configuration.
-#
-# MySQL runs natively (no Docker):
-#   - locally on your Windows machine for development
-#   - directly on the OVH server in production
 
 database:
-  host: localhost
+  host: 127.0.0.1
   port: 3306
   name: pvp_engine
   user: pvp
@@ -15,18 +11,22 @@ database:
 # The PvP world.
 #
 # It is a VOID world: nothing is generated at all. The only blocks that exist are the
-# lobby platform and the arena floors, which you create once with:
-#
-#     /pvpadmin setup 4
-#
-# That builds the lobby, 4 arenas (= 4 matches at the same time), and writes the map
-# files for you. Arenas are 512 blocks apart, so matches never see each other.
+# ones the engine places (the lobby island and the arena islands).
 world:
   name: pvp
   # Create the void world on first start.
   auto-create: true
 
-# Where players land. /pvpadmin setup writes this for you.
+  # Build the development map on first start, IF there is no map yet.
+  # This is what makes a fresh server playable without anyone typing a command.
+  #
+  # N arenas = N matches can run at the same time.
+  # Set to 0 once you have real, designed maps in plugins/PvPEngine/maps/.
+  #
+  # You can always rebuild it by hand with:  /pvpadmin setup <N>
+  auto-setup-arenas: 4
+
+# Where players land. Written for you when the development map is built.
 lobby:
   world: pvp
   x: 0.5

@@ -44,29 +44,46 @@ journalctl -u pvpengine -f
 
 ---
 
-## First run: become an operator and build the map
+## The map — nothing to upload
 
-The server has no map yet (the world is void).
+**There is no world to transfer.** The engine creates it:
 
-1. **Op yourself.** Stop the server, add your Minecraft UUID to `ops.json`:
+1. On first start it creates the **void world** `pvp` (nothing is generated at all).
+2. Because `world.auto-setup-arenas: 4`, and no map exists yet, it **builds the lobby and
+   4 arenas itself** and writes their `map.yml`. You will see it in the log:
+
+```
+[PvPEngine] No map found — building the development map (4 arenas)…
+[PvPEngine] Development map built: 23801 blocks, 4 arena(s) → 4 simultaneous matches.
+```
+
+So the server is **playable the moment install.sh finishes**. Nobody has to log in, and
+nothing goes through WinSCP.
+
+To rebuild it by hand (as an operator, in game): `/pvpadmin setup 4` — safe to re-run,
+it clears its volume first.
+
+### Op yourself (optional, for admin commands)
 
 ```bash
 sudo systemctl stop pvpengine
-# get your UUID: https://api.mojang.com/users/profiles/minecraft/<YourName>
+# your UUID: https://api.mojang.com/users/profiles/minecraft/<YourName>
 sudo -u mcpvp tee /opt/pvp-server/ops.json > /dev/null <<'JSON'
 [{"uuid":"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx","name":"YourName","level":4,"bypassesPlayerLimit":true}]
 JSON
 sudo systemctl start pvpengine
 ```
 
-2. **Join the server**, then in chat:
+### Later: real, designed maps
 
-```
-/pvpadmin setup 4
-```
+When your designer gives you a map, **that** is when WinSCP is used:
 
-That builds the lobby and 4 arenas (4 simultaneous matches) and writes the map files.
-It is safe to re-run: it clears its volume first.
+1. Upload the **world folder** to `/opt/pvp-server/<world-name>/`, and add it to the
+   server so it loads (a world-management plugin, or make it the `level-name`).
+2. Upload a **`map.yml`** to `/opt/pvp-server/plugins/PvPEngine/maps/` describing the team
+   spawns and the bounds (see `CLAUDE.md` for the format).
+3. Set `world.auto-setup-arenas: 0` so the engine stops generating its dev map.
+4. `chown -R mcpvp:mcpvp /opt/pvp-server` and restart.
 
 ---
 

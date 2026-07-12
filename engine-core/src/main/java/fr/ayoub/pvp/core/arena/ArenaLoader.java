@@ -31,7 +31,11 @@ public final class ArenaLoader {
         File folder = new File(plugin.getDataFolder(), "maps");
         if (!folder.exists()) {
             folder.mkdirs();
-            plugin.saveResource("maps/example.yml", false);
+            // A reference, NOT a map: the ".template" suffix keeps it out of the listing
+            // below. If it were a real .yml it would count as an existing map, which would
+            // stop the engine from generating its development map on a fresh server — and
+            // it would sit on top of arena-1.
+            plugin.saveResource("maps/example.yml.template", false);
         }
 
         File[] files = folder.listFiles((dir, name) -> name.endsWith(".yml"));

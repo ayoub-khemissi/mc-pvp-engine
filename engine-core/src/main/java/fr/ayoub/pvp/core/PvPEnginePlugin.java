@@ -15,6 +15,7 @@ import fr.ayoub.pvp.core.queue.QueueService;
 import fr.ayoub.pvp.core.ui.MenuListener;
 import fr.ayoub.pvp.core.ui.Sidebar;
 import fr.ayoub.pvp.core.world.VoidChunkGenerator;
+import fr.ayoub.pvp.core.world.WorldSetup;
 import fr.ayoub.pvp.storage.DataSourceFactory;
 import fr.ayoub.pvp.storage.DatabaseConfig;
 import fr.ayoub.pvp.storage.MigrationRunner;
@@ -90,6 +91,11 @@ public final class PvPEnginePlugin extends JavaPlugin {
 
         arenaService = new ArenaService();
         arenaService.load(ArenaLoader.loadAll(this));
+
+        // A fresh server has a void world and no map at all. Rather than force an admin
+        // to log in and run /pvpadmin setup before anyone can play, build the development
+        // map ourselves — but only if there is no map yet, so we never touch a real one.
+        autoSetupIfEmpty();
 
         hotbarItems = new HotbarItems(this);
         lobbyService = new LobbyService(readLobbySpawn(), hotbarItems, arenaService);
@@ -174,6 +180,42 @@ public final class PvPEnginePlugin extends JavaPlugin {
         world.setGameRule(GameRule.FALL_DAMAGE, true);
         world.setTime(6000);                            // noon
         world.setStorm(false);
+    }
+
+    /**
+     * Builds the development map on a brand-new server, so it is playable straight after
+     * install with nobody having to type anything.
+     *
+     * Only runs when there is <b>no map at all</b>. As soon as you have real, designed
+     * maps, this never fires again — and you can disable it outright with
+     * {@code world.auto-setup-arenas: 0}.
+     */
+    private void autoSetupIfEmpty() {
+        int arenas = getConfig().getInt("world.auto-setup-arenas", 0);
+
+        if (arenas <= 0 || !arenaService.all().isEmpty()) {
+            return;
+        }
+
+        World world = Bukkit.getWorld(getConfig().getString("world.name", "pvp"));
+        if (world == null) {
+            return;
+        }
+
+        getLogger().info("No map found — building the development map (" + arenas + " arenas)…");
+        WorldSetup.Result result = WorldSetup.build(this, world, arenas);
+
+        // Point the lobby at the platform we just built (read again below).
+        getConfig().set("lobby.world", world.getName());
+        getConfig().set("lobby.x", 0.5);
+        getConfig().set("lobby.y", (double) WorldSetup.LOBBY_Y + 1);
+        getConfig().set("lobby.z", 0.5);
+        saveConfig();
+
+        arenaService.load(ArenaLoader.loadAll(this));
+
+        getLogger().info("Development map built: " + result.blocksPlaced() + " blocks, "
+                + result.arenas() + " arena(s) → " + result.arenas() + " simultaneous matches.");
     }
 
     private DatabaseConfig readDatabaseConfig() {

@@ -147,6 +147,9 @@ database:
 world:
   name: pvp
   auto-create: true
+  # Builds the lobby + 4 arenas on first start, if no map exists yet.
+  # Nothing to upload, nothing to type. Set to 0 once you have designed maps.
+  auto-setup-arenas: 4
 
 lobby:
   world: pvp
