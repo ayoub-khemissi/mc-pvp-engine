@@ -67,6 +67,11 @@ something — extend the SPI, do not special-case the mode.
   inventory. `MatchService.abortAll()` runs on shutdown.
 - **`PlayerMoveEvent` fires constantly** — only do geometry when the player changed block.
 - Ratings are stored per **(player, mode, format)**: 1v1 rank ≠ 3v3 rank.
+- **A queue ticket is a group, not a player.** A solo player is a group of one, a party is
+  a group of several. That is the only reason friends are never split across two teams —
+  the matchmaker moves whole tickets. It follows that leaving a queue removes the **whole**
+  ticket (a party queues and leaves together), and that a party rating is the **average of
+  its members**, weighted per player when a team average is computed.
 
 ## Build / test
 
@@ -105,6 +110,9 @@ Real designed maps just drop in — no code needed.
 
 ## Roadmap
 
-Done: M0 database · M1 lobby+UI · M2 arenas+walls · M3 queue+match+duel · M4 ELO+leaderboard.
-Next: M5 teams/parties · M6 rounds+spectators · M7 a 2nd mode (dodgeball) · M8 classes,
-**talent trees** (pure domain, TDD) and abilities · M9 proxy/Redis if one box is not enough.
+Done: M0 database · M1 lobby+UI · M2 arenas+walls · M3 queue+match+duel · M4 ELO+leaderboard ·
+M5 parties (queue with friends, never split across teams).
+Next: M6 rounds+spectators · M7 a 2nd mode (dodgeball) · M8 classes, **talent trees** (pure
+domain, TDD) and abilities · M9 proxy/Redis if one box is not enough.
+Also pending, and worth doing before real ratings pile up: **seasons** (ELO reset + archive) —
+`MONETIZATION.md` says the battle pass depends on it.

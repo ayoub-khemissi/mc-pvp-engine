@@ -1,6 +1,7 @@
 package fr.ayoub.pvp.core.lobby;
 
 import fr.ayoub.pvp.core.PvPEnginePlugin;
+import fr.ayoub.pvp.core.menu.PartyMenu;
 import fr.ayoub.pvp.core.menu.PlayMenu;
 import fr.ayoub.pvp.core.menu.ProfileMenu;
 import fr.ayoub.pvp.core.ui.Menu;
@@ -49,6 +50,9 @@ public final class LobbyListener implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
+        // Leaving the party also pulls the party's ticket out of the queue — the group
+        // that was queued no longer exists.
+        plugin.parties().leave(event.getPlayer());
         plugin.queue().leave(event.getPlayer());
         Sidebar.clear(event.getPlayer());
     }
@@ -67,6 +71,7 @@ public final class LobbyListener implements Listener {
 
             switch (hotbarAction) {
                 case HotbarItems.ACTION_PLAY -> new PlayMenu(plugin).open(player);
+                case HotbarItems.ACTION_PARTY -> new PartyMenu(plugin).open(player);
                 case HotbarItems.ACTION_PROFILE -> new ProfileMenu(plugin).open(player);
                 case HotbarItems.ACTION_LEAVE_QUEUE -> {
                     plugin.queue().leave(player);

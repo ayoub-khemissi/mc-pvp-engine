@@ -26,6 +26,14 @@ world:
   # You can always rebuild it by hand with:  /pvpadmin setup <N>
   auto-setup-arenas: 4
 
+# Parties: playing with friends.
+#
+# A party queues as ONE ticket, so its members are never split across two teams.
+# max-size should be the biggest team you support: 5 lets a full 5v5 team queue together.
+# A party can only queue for a format whose team is at least as big as the party.
+party:
+  max-size: 5
+
 # Where players land. Written for you when the development map is built.
 lobby:
   world: pvp

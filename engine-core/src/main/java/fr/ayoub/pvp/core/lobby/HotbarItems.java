@@ -21,10 +21,12 @@ import java.util.Optional;
 public final class HotbarItems {
 
     public static final String ACTION_PLAY = "play";
+    public static final String ACTION_PARTY = "party";
     public static final String ACTION_PROFILE = "profile";
     public static final String ACTION_LEAVE_QUEUE = "leave_queue";
 
     public static final int SLOT_PLAY = 0;
+    public static final int SLOT_PARTY = 2;
     public static final int SLOT_PROFILE = 4;
     public static final int SLOT_LEAVE_QUEUE = 8;
 
@@ -39,6 +41,14 @@ public final class HotbarItems {
                 Component.text("Play", NamedTextColor.GREEN),
                 Component.text("Right-click to choose a game mode", NamedTextColor.GRAY)),
                 ACTION_PLAY);
+    }
+
+    public ItemStack party() {
+        return tag(Icons.of(Material.PLAYER_HEAD,
+                Component.text("Party", NamedTextColor.LIGHT_PURPLE),
+                Component.text("Play with your friends", NamedTextColor.GRAY),
+                Component.text("Right-click to invite or answer an invite", NamedTextColor.DARK_GRAY)),
+                ACTION_PARTY);
     }
 
     public ItemStack profile() {

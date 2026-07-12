@@ -11,6 +11,7 @@ import fr.ayoub.pvp.core.lobby.LobbyService;
 import fr.ayoub.pvp.core.match.GameModeRegistry;
 import fr.ayoub.pvp.core.match.MatchListener;
 import fr.ayoub.pvp.core.match.MatchService;
+import fr.ayoub.pvp.core.party.PartyService;
 import fr.ayoub.pvp.core.queue.QueueService;
 import fr.ayoub.pvp.core.ui.MenuListener;
 import fr.ayoub.pvp.core.ui.Sidebar;
@@ -61,6 +62,7 @@ public final class PvPEnginePlugin extends JavaPlugin {
     private GameModeRegistry gameModeRegistry;
     private MatchService matchService;
     private QueueService queueService;
+    private PartyService partyService;
 
     @Override
     public void onEnable() {
@@ -105,6 +107,7 @@ public final class PvPEnginePlugin extends JavaPlugin {
 
         matchService = new MatchService(this);
         queueService = new QueueService(this);
+        partyService = new PartyService(this, getConfig().getInt("party.max-size", 5));
 
         getServer().getPluginManager().registerEvents(new MenuListener(), this);
         getServer().getPluginManager().registerEvents(new LobbyListener(this, lobbyService, hotbarItems), this);
@@ -115,8 +118,9 @@ public final class PvPEnginePlugin extends JavaPlugin {
         getCommand("pvpadmin").setExecutor(admin);
         getCommand("pvpadmin").setTabCompleter(admin);
 
-        // One tick a second: form matches, refresh sidebars.
+        // One tick a second: expire invites, form matches, refresh sidebars.
         Bukkit.getScheduler().runTaskTimer(this, () -> {
+            partyService.tick();
             queueService.tick();
             Bukkit.getOnlinePlayers().forEach(player -> Sidebar.update(this, player));
         }, 20L, 20L);
@@ -288,5 +292,9 @@ public final class PvPEnginePlugin extends JavaPlugin {
 
     public QueueService queue() {
         return queueService;
+    }
+
+    public PartyService parties() {
+        return partyService;
     }
 }

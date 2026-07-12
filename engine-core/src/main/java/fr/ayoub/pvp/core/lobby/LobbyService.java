@@ -69,6 +69,7 @@ public final class LobbyService {
     private void giveItems(Player player) {
         PlayerInventory inventory = player.getInventory();
         inventory.setItem(HotbarItems.SLOT_PLAY, hotbar.play());
+        inventory.setItem(HotbarItems.SLOT_PARTY, hotbar.party());
         inventory.setItem(HotbarItems.SLOT_PROFILE, hotbar.profile());
         inventory.setHeldItemSlot(HotbarItems.SLOT_PLAY);
     }

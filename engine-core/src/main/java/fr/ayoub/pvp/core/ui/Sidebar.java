@@ -37,9 +37,14 @@ public final class Sidebar {
             board.resetScores(entry);
         }
 
-        objective.getScore("§7Player: §f" + player.getName()).setScore(3);
-        objective.getScore("§7State: " + state(plugin, player)).setScore(2);
-        objective.getScore("§7Online: §f" + Bukkit.getOnlinePlayers().size()).setScore(1);
+        Objective lines = objective;
+        lines.getScore("§7Player: §f" + player.getName()).setScore(4);
+        lines.getScore("§7State: " + state(plugin, player)).setScore(3);
+
+        plugin.parties().partyOf(player).ifPresent(party ->
+                lines.getScore("§7Party: §d" + party.size() + "/" + party.maxSize()).setScore(2));
+
+        lines.getScore("§7Online: §f" + Bukkit.getOnlinePlayers().size()).setScore(1);
     }
 
     private static String state(PvPEnginePlugin plugin, Player player) {

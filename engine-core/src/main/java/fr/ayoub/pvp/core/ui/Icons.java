@@ -3,7 +3,9 @@ package fr.ayoub.pvp.core.ui;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.SkullMeta;
 
 import java.util.Arrays;
 import java.util.List;
@@ -26,6 +28,13 @@ public final class Icons {
                 meta.lore(lines);
             }
         });
+        return item;
+    }
+
+    /** The same, but wearing the player's own skin — used everywhere we list people. */
+    public static ItemStack head(OfflinePlayer owner, Component name, Component... lore) {
+        ItemStack item = of(Material.PLAYER_HEAD, name, lore);
+        item.editMeta(SkullMeta.class, meta -> meta.setOwningPlayer(owner));
         return item;
     }
 }
