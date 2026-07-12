@@ -55,8 +55,8 @@ public final class MatchListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
         matches.matchOf(event.getPlayer()).ifPresent(match -> {
-            if (match.isLive()) {
-                return;
+            if (match.isLive() || !match.isAlive(event.getPlayer())) {
+                return;   // never freeze someone who is watching from spectator mode
             }
             if (changedBlock(event)) {
                 event.setCancelled(true);

@@ -71,6 +71,7 @@ public final class LobbyService {
         inventory.setItem(HotbarItems.SLOT_PLAY, hotbar.play());
         inventory.setItem(HotbarItems.SLOT_PARTY, hotbar.party());
         inventory.setItem(HotbarItems.SLOT_PROFILE, hotbar.profile());
+        inventory.setItem(HotbarItems.SLOT_SPECTATE, hotbar.spectate());
         inventory.setHeldItemSlot(HotbarItems.SLOT_PLAY);
     }
 }

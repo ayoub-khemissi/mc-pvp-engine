@@ -38,8 +38,14 @@ public interface MatchContext {
     /** Take a player out of the fight. The engine then checks the win condition. */
     void eliminate(Player player);
 
-    /** 1-based. */
+    /** 1-based: the round being played. */
     int round();
+
+    /** Best-of: how many rounds this match can last. */
+    int bestOf();
+
+    /** How many rounds a team has already won. */
+    int roundsWon(int team);
 
     World world();
 

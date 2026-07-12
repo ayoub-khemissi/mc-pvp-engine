@@ -137,6 +137,11 @@ public final class QueueService {
             player.sendMessage(Component.text("You are already in a match.", NamedTextColor.RED));
             return false;
         }
+        if (plugin.matches().isSpectating(player)) {
+            player.sendMessage(Component.text(
+                    "Stop spectating first — sneak (Shift) to leave.", NamedTextColor.RED));
+            return false;
+        }
 
         if (party != null) {
             if (!party.isLeader(player.getUniqueId())) {

@@ -4,6 +4,7 @@ import fr.ayoub.pvp.core.PvPEnginePlugin;
 import fr.ayoub.pvp.core.menu.PartyMenu;
 import fr.ayoub.pvp.core.menu.PlayMenu;
 import fr.ayoub.pvp.core.menu.ProfileMenu;
+import fr.ayoub.pvp.core.menu.SpectateMenu;
 import fr.ayoub.pvp.core.ui.Menu;
 import fr.ayoub.pvp.core.ui.Sidebar;
 import net.kyori.adventure.text.Component;
@@ -20,6 +21,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerToggleSneakEvent;
 
 /** Everything that happens to a player while they are in the lobby. */
 public final class LobbyListener implements Listener {
@@ -73,6 +75,7 @@ public final class LobbyListener implements Listener {
                 case HotbarItems.ACTION_PLAY -> new PlayMenu(plugin).open(player);
                 case HotbarItems.ACTION_PARTY -> new PartyMenu(plugin).open(player);
                 case HotbarItems.ACTION_PROFILE -> new ProfileMenu(plugin).open(player);
+                case HotbarItems.ACTION_SPECTATE -> new SpectateMenu(plugin).open(player);
                 case HotbarItems.ACTION_LEAVE_QUEUE -> {
                     plugin.queue().leave(player);
                     player.getInventory().setItem(HotbarItems.SLOT_LEAVE_QUEUE, null);
@@ -99,8 +102,25 @@ public final class LobbyListener implements Listener {
         if (!lobby.isInLobby(player)) {
             return;
         }
+        // A spectator is flying around an arena, far below the lobby platform. They are
+        // not falling into the void — rescuing them would teleport them straight out of
+        // the match they are watching.
+        if (plugin.matches().isSpectating(player)) {
+            return;
+        }
         if (event.getTo().getY() < lobby.spawn().getY() - VOID_DEPTH) {
             lobby.send(player);
+        }
+    }
+
+    /**
+     * Spectators have no usable hotbar (SPECTATOR mode ignores item interactions), so the
+     * way out is to sneak. It is also what every other server does, so players expect it.
+     */
+    @EventHandler
+    public void onSneak(PlayerToggleSneakEvent event) {
+        if (event.isSneaking() && plugin.matches().isSpectating(event.getPlayer())) {
+            plugin.matches().stopSpectating(event.getPlayer());
         }
     }
 

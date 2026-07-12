@@ -48,8 +48,14 @@ public final class Sidebar {
     }
 
     private static String state(PvPEnginePlugin plugin, Player player) {
+        if (plugin.matches().isSpectating(player)) {
+            return "§bSpectating";
+        }
         if (plugin.matches().isInMatch(player)) {
-            return "§cIn match";
+            return plugin.matches().matchOf(player)
+                    .map(match -> "§cRound " + match.round() + "/" + match.bestOf()
+                            + " §7(" + match.series().scoreline() + ")")
+                    .orElse("§cIn match");
         }
         if (plugin.queue().isQueued(player)) {
             String name = plugin.queue().queueNameOf(player).orElse("?");

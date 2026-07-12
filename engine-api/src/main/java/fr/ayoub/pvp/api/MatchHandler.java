@@ -19,8 +19,15 @@ public interface MatchHandler {
     default void onPrepare(MatchContext context) {
     }
 
-    /** FIGHT. */
+    /** FIGHT. Called at the start of <b>every</b> round. */
     default void onStart(MatchContext context) {
+    }
+
+    /**
+     * A round was won. The next one is about to be set up — unless the series is decided,
+     * in which case {@link #onEnd} follows immediately.
+     */
+    default void onRoundEnd(MatchContext context, int winningTeam) {
     }
 
     default void onPlayerDeath(MatchContext context, Player victim, @Nullable Player killer) {

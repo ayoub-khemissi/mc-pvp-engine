@@ -23,11 +23,13 @@ public final class HotbarItems {
     public static final String ACTION_PLAY = "play";
     public static final String ACTION_PARTY = "party";
     public static final String ACTION_PROFILE = "profile";
+    public static final String ACTION_SPECTATE = "spectate";
     public static final String ACTION_LEAVE_QUEUE = "leave_queue";
 
     public static final int SLOT_PLAY = 0;
     public static final int SLOT_PARTY = 2;
     public static final int SLOT_PROFILE = 4;
+    public static final int SLOT_SPECTATE = 6;
     public static final int SLOT_LEAVE_QUEUE = 8;
 
     private final NamespacedKey actionKey;
@@ -56,6 +58,13 @@ public final class HotbarItems {
                 Component.text("Profile", NamedTextColor.AQUA),
                 Component.text("Your rank, rating and stats", NamedTextColor.GRAY)),
                 ACTION_PROFILE);
+    }
+
+    public ItemStack spectate() {
+        return tag(Icons.of(Material.ENDER_EYE,
+                Component.text("Spectate", NamedTextColor.DARK_AQUA),
+                Component.text("Watch a live match", NamedTextColor.GRAY)),
+                ACTION_SPECTATE);
     }
 
     public ItemStack leaveQueue() {

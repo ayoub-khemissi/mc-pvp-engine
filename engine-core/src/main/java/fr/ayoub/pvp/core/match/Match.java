@@ -8,6 +8,7 @@ import fr.ayoub.pvp.core.arena.Arena;
 import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.domain.match.MatchState;
 import fr.ayoub.pvp.domain.match.MatchStateMachine;
+import fr.ayoub.pvp.domain.match.Series;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
@@ -38,9 +39,11 @@ public final class Match implements MatchContext {
     private final MatchStateMachine state = new MatchStateMachine();
 
     private final Set<UUID> alive = new HashSet<>();
-    private final int[] roundsWon;
 
-    private int round = 1;
+    /** Players who left for good. They never come back, not even next round. */
+    private final Set<UUID> retired = new HashSet<>();
+
+    private final Series series;
 
     public Match(GameModeDefinition mode, Format format, Arena arena, List<Team> teams) {
         this.mode = mode;
@@ -48,7 +51,7 @@ public final class Match implements MatchContext {
         this.arena = arena;
         this.teams = List.copyOf(teams);
         this.handler = mode.createHandler();
-        this.roundsWon = new int[teams.size()];
+        this.series = new Series(mode.rules().rounds(), teams.size());
         resetAlive();
     }
 
@@ -70,27 +73,21 @@ public final class Match implements MatchContext {
         return state.isLive();
     }
 
+    public Series series() {
+        return series;
+    }
+
+    /** Everyone who has not left the server comes back to life for the next round. */
     public void resetAlive() {
         alive.clear();
         for (Team team : teams) {
-            alive.addAll(team.members());
+            team.members().stream()
+                    .filter(member -> !retired.contains(member))
+                    .forEach(alive::add);
         }
     }
 
-    public void nextRound() {
-        round++;
-        resetAlive();
-    }
-
-    public void awardRound(int team) {
-        roundsWon[team]++;
-    }
-
-    public int roundsWon(int team) {
-        return roundsWon[team];
-    }
-
-    /** Teams that still have at least one player alive. */
+    /** Teams that still have at least one player alive in the current round. */
     public List<Integer> teamsAlive() {
         List<Integer> standing = new ArrayList<>();
         for (Team team : teams) {
@@ -101,15 +98,36 @@ public final class Match implements MatchContext {
         return standing;
     }
 
+    /** Teams that still have at least one player <b>in the match at all</b>. */
+    public List<Integer> teamsRemaining() {
+        List<Integer> remaining = new ArrayList<>();
+        for (Team team : teams) {
+            if (team.members().stream().anyMatch(member -> !retired.contains(member))) {
+                remaining.add(team.index());
+            }
+        }
+        return remaining;
+    }
+
     public List<UUID> allMembers() {
         List<UUID> all = new ArrayList<>();
         teams.forEach(team -> all.addAll(team.members()));
         return all;
     }
 
-    /** Remove someone for good (disconnected). */
+    /**
+     * Remove someone for good (disconnected).
+     *
+     * They must stay out for the rest of the series: without this, the next round would
+     * happily bring a player who is no longer on the server back to life.
+     */
     public void removeCompletely(UUID player) {
         alive.remove(player);
+        retired.add(player);
+    }
+
+    public boolean hasRetired(UUID player) {
+        return retired.contains(player);
     }
 
     // --- MatchContext ----------------------------------------------------------
@@ -167,7 +185,17 @@ public final class Match implements MatchContext {
 
     @Override
     public int round() {
-        return round;
+        return series.round();
+    }
+
+    @Override
+    public int bestOf() {
+        return series.bestOf();
+    }
+
+    @Override
+    public int roundsWon(int team) {
+        return series.wins(team);
     }
 
     @Override

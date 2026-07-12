@@ -63,6 +63,19 @@ something — extend the SPI, do not special-case the mode.
   leftover `barrier` blocks from an old layout are *invisible* and cause "I bump into
   nothing" bugs.
 - **Fatal damage is intercepted**, players do not "die": no death screen, no drops.
+- **A match is a best-of** (`Series`, in the domain). A round ends on last-team-standing;
+  the *match* ends when a team has won `bestOf / 2 + 1` rounds. `MatchRules.rounds` must be
+  **odd** — an even best-of can end 1-1, and a ranked ladder cannot produce a draw.
+  Between two rounds everyone (the eliminated included) is healed, re-kitted and respawned:
+  that is `setUpRound`, and it is also what pulls dead players back out of spectator mode.
+  A player who **disconnects is retired** — otherwise the next round would revive someone
+  who has left the server, and a team with nobody left forfeits the whole series.
+- **Two kinds of spectator.** Eliminated players are still *in* the match (they come back
+  next round). Lobby spectators are watching from outside: they are **not** registered with
+  `ArenaService` (the server-side wall check would fight them), and for the same reason the
+  lobby's void-catch must skip them — the arena floor is 36 blocks below the lobby, so it
+  would teleport them straight out of the match. They leave by **sneaking** (SPECTATOR mode
+  ignores item interaction, so there is no hotbar to click).
 - **`PlayerSnapshot`** is taken before a match and restored after, so a crash never eats an
   inventory. `MatchService.abortAll()` runs on shutdown.
 - **`PlayerMoveEvent` fires constantly** — only do geometry when the player changed block.
@@ -111,8 +124,8 @@ Real designed maps just drop in — no code needed.
 ## Roadmap
 
 Done: M0 database · M1 lobby+UI · M2 arenas+walls · M3 queue+match+duel · M4 ELO+leaderboard ·
-M5 parties (queue with friends, never split across teams).
-Next: M6 rounds+spectators · M7 a 2nd mode (dodgeball) · M8 classes, **talent trees** (pure
-domain, TDD) and abilities · M9 proxy/Redis if one box is not enough.
+M5 parties (queue with friends, never split across teams) · M6 rounds (best-of) + spectators.
+Next: M7 a 2nd mode (dodgeball) · M8 classes, **talent trees** (pure domain, TDD) and
+abilities · M9 proxy/Redis if one box is not enough.
 Also pending, and worth doing before real ratings pile up: **seasons** (ELO reset + archive) —
 `MONETIZATION.md` says the battle pass depends on it.

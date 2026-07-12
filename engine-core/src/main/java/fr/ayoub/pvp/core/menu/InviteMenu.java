@@ -33,6 +33,7 @@ public final class InviteMenu extends Menu {
                 .filter(player -> !player.equals(viewer))
                 .filter(player -> plugin.parties().partyOf(player).isEmpty())
                 .filter(player -> !plugin.matches().isInMatch(player))
+                .filter(player -> !plugin.matches().isSpectating(player))
                 .filter(player -> !plugin.queue().isQueued(player))
                 .sorted(Comparator.comparing(Player::getName))
                 .toList();
