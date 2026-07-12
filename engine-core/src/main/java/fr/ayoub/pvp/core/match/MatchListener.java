@@ -9,6 +9,7 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
@@ -130,6 +131,29 @@ public final class MatchListener implements Listener {
         }
         // No shooting during the countdown, the round break or the victory screen.
         matches.matchOf(player).ifPresent(match -> {
+            if (!match.isLive()) {
+                event.setCancelled(true);
+            }
+        });
+    }
+
+    /**
+     * Nothing may be launched before FIGHT.
+     *
+     * The client is already stopped by the item cooldown ({@link Freeze}), which is why the
+     * bow cannot even be drawn. This is the server having the last word: a modified client
+     * is not bound by a cooldown.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void onLaunch(ProjectileLaunchEvent event) {
+        if (!(event.getEntity().getShooter() instanceof Player shooter)) {
+            return;
+        }
+        if (isWatching(shooter)) {
+            event.setCancelled(true);
+            return;
+        }
+        matches.matchOf(shooter).ifPresent(match -> {
             if (!match.isLive()) {
                 event.setCancelled(true);
             }

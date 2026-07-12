@@ -3,6 +3,7 @@ package fr.ayoub.pvp.core.match;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 /**
  * Freezing a player — without the rubber-band.
@@ -28,14 +29,23 @@ public final class Freeze {
     public static final float WALK_SPEED = 0.2f;
     public static final float FLY_SPEED = 0.1f;
 
+    /**
+     * How long the items stay locked. Longer than any countdown on purpose: the lock is
+     * always lifted explicitly by {@link #release}, and a cooldown left behind by a crash
+     * is harmless — it runs out on its own.
+     */
+    private static final int ITEM_LOCK_TICKS = 20 * 60;
+
     private Freeze() {
     }
 
+    /** Legs and hands: the player can look around, and re-order their hotbar. Nothing else. */
     public static void apply(Player player) {
         player.setWalkSpeed(0f);
         player.setFlySpeed(0f);
         player.setSprinting(false);
         jumpStrength(player, 0.0);
+        lockItems(player, ITEM_LOCK_TICKS);
     }
 
     public static void release(Player player) {
@@ -45,6 +55,26 @@ public final class Freeze {
         AttributeInstance jump = player.getAttribute(Attribute.JUMP_STRENGTH);
         if (jump != null) {
             jump.setBaseValue(jump.getDefaultValue());
+        }
+        lockItems(player, 0);
+    }
+
+    /**
+     * Put every item the player carries on cooldown.
+     *
+     * A cooldown is <b>sent to the client</b>, and the client will not use an item that is
+     * on one: the bow is not drawn at all, no charge is started, nothing is eaten or
+     * thrown. That is the difference with cancelling the interaction server-side, which
+     * lets the client play the whole draw animation and only refuses the shot.
+     *
+     * Held items are free to be swapped around — choosing your weapon during the countdown
+     * is part of the game.
+     */
+    private static void lockItems(Player player, int ticks) {
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (item != null && !item.getType().isAir()) {
+                player.setCooldown(item.getType(), ticks);
+            }
         }
     }
 

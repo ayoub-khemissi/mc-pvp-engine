@@ -149,10 +149,12 @@ public final class MatchService {
                 player.setFireTicks(0);
                 player.setFallDistance(0);
 
-                // Frozen on the client until FIGHT — see Freeze: no rubber-band.
-                Freeze.apply(player);
-
                 match.handler().giveKit(match, player, team.index());
+
+                // Frozen on the client until FIGHT — see Freeze. This comes AFTER the kit:
+                // it locks the items the player is holding, and an empty inventory has
+                // nothing to lock.
+                Freeze.apply(player);
             }
         }
     }
