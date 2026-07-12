@@ -42,12 +42,16 @@ public final class MatchService {
     /** How long the scoreline stays on screen between two rounds. */
     private static final long ROUND_BREAK_TICKS = 60L;
 
+    /** Two sneaks within this delay mean "let me out", one means "go down". */
+    private static final long DOUBLE_SNEAK_MILLIS = 500L;
+
     private final PvPEnginePlugin plugin;
     private final RatingService ratings;
 
     private final Map<UUID, Match> matchByPlayer = new HashMap<>();
     private final Map<UUID, PlayerSnapshot> snapshots = new HashMap<>();
     private final Map<UUID, Match> spectating = new HashMap<>();
+    private final Map<UUID, Long> lastSneak = new HashMap<>();
     private final List<Match> active = new ArrayList<>();
 
     public MatchService(PvPEnginePlugin plugin) {
@@ -470,7 +474,7 @@ public final class MatchService {
         player.sendMessage(Component.text("Now spectating ", NamedTextColor.AQUA)
                 .append(Component.text(match.mode().id() + " " + match.format().id(),
                         NamedTextColor.WHITE)));
-        player.sendMessage(Component.text("Sneak (Shift) to go back to the lobby.",
+        player.sendMessage(Component.text("Double-Shift to go back to the lobby.",
                 NamedTextColor.GRAY));
     }
 
@@ -478,10 +482,44 @@ public final class MatchService {
         if (spectating.remove(player.getUniqueId()) == null) {
             return;
         }
+        lastSneak.remove(player.getUniqueId());
         snapshots.remove(player.getUniqueId());
 
         if (player.isOnline()) {
             plugin.lobby().send(player);   // resets the game mode and the hotbar
+        }
+    }
+
+    /**
+     * A spectator sneaked.
+     *
+     * Sneak is the only key a spectator can send us — Minecraft blocks item use, dropping
+     * and hand-swapping in SPECTATOR mode. But sneak is also how you <b>fly down</b>, so a
+     * single one cannot mean "leave": you would be unable to descend. Two in quick
+     * succession do.
+     */
+    public void handleSpectatorSneak(Player player) {
+        if (!isSpectating(player)) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        Long previous = lastSneak.put(player.getUniqueId(), now);
+
+        if (previous != null && now - previous <= DOUBLE_SNEAK_MILLIS) {
+            stopSpectating(player);
+        }
+    }
+
+    /** Called once a second: spectators always know how to get out. */
+    public void remindSpectators() {
+        for (UUID id : spectating.keySet()) {
+            Player player = Bukkit.getPlayer(id);
+            if (player != null && player.isOnline()) {
+                player.sendActionBar(Component.text("Double-Shift", NamedTextColor.AQUA)
+                        .append(Component.text(" to leave  ·  Shift to descend",
+                                NamedTextColor.GRAY)));
+            }
         }
     }
 

@@ -122,6 +122,7 @@ public final class PvPEnginePlugin extends JavaPlugin {
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             partyService.tick();
             queueService.tick();
+            matchService.remindSpectators();
             Bukkit.getOnlinePlayers().forEach(player -> Sidebar.update(this, player));
         }, 20L, 20L);
 

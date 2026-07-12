@@ -118,13 +118,16 @@ public final class LobbyListener implements Listener {
     }
 
     /**
-     * Spectators have no usable hotbar (SPECTATOR mode ignores item interactions), so the
-     * way out is to sneak. It is also what every other server does, so players expect it.
+     * The way out of spectator mode.
+     *
+     * Sneak is the only key a spectator can send us — SPECTATOR ignores item use, dropping
+     * and hand-swapping. But sneak is also how a spectator flies <b>down</b>, so leaving
+     * has to be a <b>double</b>-sneak: a single one must keep working as "descend".
      */
     @EventHandler
     public void onSneak(PlayerToggleSneakEvent event) {
-        if (event.isSneaking() && plugin.matches().isSpectating(event.getPlayer())) {
-            plugin.matches().stopSpectating(event.getPlayer());
+        if (event.isSneaking()) {
+            plugin.matches().handleSpectatorSneak(event.getPlayer());
         }
     }
 
