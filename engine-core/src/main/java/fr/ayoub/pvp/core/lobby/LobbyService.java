@@ -1,6 +1,7 @@
 package fr.ayoub.pvp.core.lobby;
 
 import fr.ayoub.pvp.core.arena.ArenaService;
+import fr.ayoub.pvp.core.match.Freeze;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.attribute.Attribute;
@@ -64,6 +65,10 @@ public final class LobbyService {
         player.setGameMode(GameMode.ADVENTURE);
         player.setAllowFlight(false);
         player.setFlying(false);
+
+        // The lobby is the one place that always gives movement back: whatever a match did
+        // to this player, they walk normally here.
+        Freeze.release(player);
     }
 
     private void giveItems(Player player) {

@@ -51,7 +51,15 @@ public final class MatchListener implements Listener {
         });
     }
 
-    /** Frozen until FIGHT: you may look around, but not move. */
+    /**
+     * The backstop for the freeze.
+     *
+     * The real freeze is {@link Freeze}: the client is told its walk speed is 0, so it does
+     * not move at all and nothing has to be corrected. This only catches what the client
+     * does not decide — knockback, a piston, an ender pearl still in flight — and should
+     * essentially never fire. Cancelling a move is what causes the rubber-band, so it must
+     * stay the exception, not the mechanism.
+     */
     @EventHandler(ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
         matches.matchOf(event.getPlayer()).ifPresent(match -> {

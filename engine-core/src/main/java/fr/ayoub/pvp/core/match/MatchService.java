@@ -144,6 +144,9 @@ public final class MatchService {
                 player.setFireTicks(0);
                 player.setFallDistance(0);
 
+                // Frozen on the client until FIGHT — see Freeze: no rubber-band.
+                Freeze.apply(player);
+
                 match.handler().giveKit(match, player, team.index());
             }
         }
@@ -195,6 +198,9 @@ public final class MatchService {
 
     private void begin(Match match) {
         match.state().transitionTo(MatchState.LIVE);
+
+        match.alivePlayers().forEach(Freeze::release);   // and only now can they move
+
         match.title(Component.text("FIGHT!", NamedTextColor.RED), Component.empty());
         match.onlinePlayers().forEach(player ->
                 player.playSound(player, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.6f, 1.4f));
@@ -273,6 +279,10 @@ public final class MatchService {
     private void endRound(Match match, int winningTeam) {
         match.state().transitionTo(MatchState.ROUND_ENDING);
 
+        // The round is over: the survivors stop dead where they are, they do not get to
+        // wander around the arena while the scoreline is up.
+        match.alivePlayers().forEach(Freeze::apply);
+
         Series series = match.series();
         boolean draw = winningTeam == MatchOutcome.NO_TEAM;
 
@@ -327,6 +337,9 @@ public final class MatchService {
             return;
         }
         match.state().transitionTo(MatchState.ENDING);
+
+        // Same at the very end: nobody runs around during VICTORY / DEFEAT.
+        match.alivePlayers().forEach(Freeze::apply);
 
         if (outcome.hasWinner()) {
             String score = match.series().scoreline();
@@ -475,6 +488,8 @@ public final class MatchService {
      * much in the match.
      */
     private void makeSpectator(Player player, Match match) {
+        // Undo the freeze, or they would be a spectator who cannot fly.
+        Freeze.release(player);
         player.setGameMode(GameMode.SPECTATOR);
         player.teleport(match.arena().center());
     }
