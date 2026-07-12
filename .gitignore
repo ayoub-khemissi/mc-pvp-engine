@@ -1,0 +1,14 @@
+.gradle/
+build/
+*/build/
+*/*/build/
+dist/
+run/
+run-data/
+
+.idea/
+*.iml
+.vscode/
+
+# never commit a real config: it holds the database password
+plugins/

@@ -1,0 +1,250 @@
+package fr.ayoub.pvp.core;
+
+import fr.ayoub.pvp.api.PvPEngineApi;
+import fr.ayoub.pvp.core.admin.AdminCommand;
+import fr.ayoub.pvp.core.arena.ArenaLoader;
+import fr.ayoub.pvp.core.arena.ArenaService;
+import fr.ayoub.pvp.core.arena.WallListener;
+import fr.ayoub.pvp.core.lobby.HotbarItems;
+import fr.ayoub.pvp.core.lobby.LobbyListener;
+import fr.ayoub.pvp.core.lobby.LobbyService;
+import fr.ayoub.pvp.core.match.GameModeRegistry;
+import fr.ayoub.pvp.core.match.MatchListener;
+import fr.ayoub.pvp.core.match.MatchService;
+import fr.ayoub.pvp.core.queue.QueueService;
+import fr.ayoub.pvp.core.ui.MenuListener;
+import fr.ayoub.pvp.core.ui.Sidebar;
+import fr.ayoub.pvp.core.world.VoidChunkGenerator;
+import fr.ayoub.pvp.storage.DataSourceFactory;
+import fr.ayoub.pvp.storage.DatabaseConfig;
+import fr.ayoub.pvp.storage.MigrationRunner;
+import fr.ayoub.pvp.storage.PlayerRepository;
+import fr.ayoub.pvp.storage.RatingRepository;
+import org.bukkit.Bukkit;
+import org.bukkit.Difficulty;
+import org.bukkit.GameRule;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.WorldCreator;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import javax.sql.DataSource;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Entry point of the engine.
+ *
+ *   M0 — config + database          (done)
+ *   M1 — lobby, hotbar, menus       (done)
+ *   M2 — arenas + invisible walls   (done)
+ *   M3 — queue + match + duel mode  (done)
+ *   M4 — Elo + leaderboard
+ */
+public final class PvPEnginePlugin extends JavaPlugin {
+
+    public static final int STARTING_RATING = 1000;
+
+    private DataSource dataSource;
+    private ExecutorService asyncExecutor;
+
+    private PlayerRepository playerRepository;
+    private RatingRepository ratingRepository;
+
+    private ArenaService arenaService;
+    private LobbyService lobbyService;
+    private HotbarItems hotbarItems;
+    private GameModeRegistry gameModeRegistry;
+    private MatchService matchService;
+    private QueueService queueService;
+
+    @Override
+    public void onEnable() {
+        saveDefaultConfig();
+
+        try {
+            dataSource = DataSourceFactory.create(readDatabaseConfig());
+            new MigrationRunner(dataSource).migrate();
+        } catch (RuntimeException e) {
+            getLogger().severe("Could not reach the database: " + e.getMessage());
+            getLogger().severe("Check the 'database' section of config.yml. Disabling PvP Engine.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        // Every database call goes through here — never on the main thread.
+        asyncExecutor = Executors.newFixedThreadPool(4, runnable -> {
+            Thread thread = new Thread(runnable, "pvp-engine-db");
+            thread.setDaemon(true);
+            return thread;
+        });
+
+        playerRepository = new PlayerRepository(dataSource);
+        ratingRepository = new RatingRepository(dataSource);
+
+        // The void world must exist before maps (which reference it) are loaded.
+        ensurePvpWorld();
+
+        arenaService = new ArenaService();
+        arenaService.load(ArenaLoader.loadAll(this));
+
+        hotbarItems = new HotbarItems(this);
+        lobbyService = new LobbyService(readLobbySpawn(), hotbarItems, arenaService);
+
+        gameModeRegistry = new GameModeRegistry(getLogger());
+        PvPEngineApi.init(gameModeRegistry);   // mode plugins can now register
+
+        matchService = new MatchService(this);
+        queueService = new QueueService(this);
+
+        getServer().getPluginManager().registerEvents(new MenuListener(), this);
+        getServer().getPluginManager().registerEvents(new LobbyListener(this, lobbyService, hotbarItems), this);
+        getServer().getPluginManager().registerEvents(new WallListener(arenaService), this);
+        getServer().getPluginManager().registerEvents(new MatchListener(matchService), this);
+
+        AdminCommand admin = new AdminCommand(this, arenaService);
+        getCommand("pvpadmin").setExecutor(admin);
+        getCommand("pvpadmin").setTabCompleter(admin);
+
+        // One tick a second: form matches, refresh sidebars.
+        Bukkit.getScheduler().runTaskTimer(this, () -> {
+            queueService.tick();
+            Bukkit.getOnlinePlayers().forEach(player -> Sidebar.update(this, player));
+        }, 20L, 20L);
+
+        Bukkit.getOnlinePlayers().forEach(lobbyService::send);
+
+        getLogger().info("PvP Engine enabled — " + arenaService.all().size() + " map(s).");
+    }
+
+    @Override
+    public void onDisable() {
+        if (matchService != null) {
+            matchService.abortAll();   // nobody stays stranded in an arena
+        }
+        if (asyncExecutor != null) {
+            asyncExecutor.shutdown();
+            try {
+                asyncExecutor.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        if (dataSource != null) {
+            DataSourceFactory.close(dataSource);
+        }
+        getLogger().info("PvP Engine disabled.");
+    }
+
+    /** Tell Bukkit that our world is generated by {@link VoidChunkGenerator}. */
+    @Override
+    public ChunkGenerator getDefaultWorldGenerator(String worldName, String id) {
+        return new VoidChunkGenerator();
+    }
+
+    /** Creates the void PvP world on first start, and keeps it calm. */
+    private void ensurePvpWorld() {
+        String name = getConfig().getString("world.name", "pvp");
+
+        World world = Bukkit.getWorld(name);
+        if (world == null) {
+            if (!getConfig().getBoolean("world.auto-create", true)) {
+                return;
+            }
+            getLogger().info("Creating the void world '" + name + "' …");
+            world = new WorldCreator(name)
+                    .generator(new VoidChunkGenerator())
+                    .environment(World.Environment.NORMAL)
+                    .createWorld();
+        }
+        if (world == null) {
+            getLogger().severe("Could not create the world '" + name + "'.");
+            return;
+        }
+
+        // A PvP world does not need weather, night, mobs or hunger surprises.
+        world.setDifficulty(Difficulty.NORMAL);        // PEACEFUL would cancel all damage
+        world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
+        world.setGameRule(GameRule.DO_WEATHER_CYCLE, false);
+        world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+        world.setGameRule(GameRule.ANNOUNCE_ADVANCEMENTS, false);
+        world.setGameRule(GameRule.FALL_DAMAGE, true);
+        world.setTime(6000);                            // noon
+        world.setStorm(false);
+    }
+
+    private DatabaseConfig readDatabaseConfig() {
+        ConfigurationSection section = getConfig().getConfigurationSection("database");
+        if (section == null) {
+            throw new IllegalStateException("missing 'database' section in config.yml");
+        }
+        return new DatabaseConfig(
+                section.getString("host", "localhost"),
+                section.getInt("port", 3306),
+                section.getString("name", "pvp_engine"),
+                section.getString("user", "pvp"),
+                section.getString("password", ""),
+                section.getInt("pool-size", 10));
+    }
+
+    private Location readLobbySpawn() {
+        ConfigurationSection section = getConfig().getConfigurationSection("lobby");
+        String worldName = section != null ? section.getString("world", "world") : "world";
+
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) {
+            world = Bukkit.getWorlds().getFirst();
+            getLogger().warning("Lobby world '" + worldName + "' not found, using '" + world.getName() + "'.");
+        }
+        if (section == null) {
+            return world.getSpawnLocation();
+        }
+
+        return new Location(
+                world,
+                section.getDouble("x", 0.5),
+                section.getDouble("y", 100.0),
+                section.getDouble("z", 0.5),
+                (float) section.getDouble("yaw", 0.0),
+                (float) section.getDouble("pitch", 0.0));
+    }
+
+    public ExecutorService async() {
+        return asyncExecutor;
+    }
+
+    public PlayerRepository players() {
+        return playerRepository;
+    }
+
+    public RatingRepository ratings() {
+        return ratingRepository;
+    }
+
+    public ArenaService arenas() {
+        return arenaService;
+    }
+
+    public LobbyService lobby() {
+        return lobbyService;
+    }
+
+    public HotbarItems hotbar() {
+        return hotbarItems;
+    }
+
+    public GameModeRegistry modes() {
+        return gameModeRegistry;
+    }
+
+    public MatchService matches() {
+        return matchService;
+    }
+
+    public QueueService queue() {
+        return queueService;
+    }
+}

@@ -1,0 +1,10 @@
+name: ModeDuel
+version: '0.1.0'
+main: fr.ayoub.pvp.mode.duel.DuelModePlugin
+api-version: '26.1'
+author: Ayoub
+description: Vanilla PvP duels (1v1, 2v2, 3v3) for the PvP Engine.
+
+# The engine must load first — its classes (engine-api) come from its jar.
+depend:
+  - PvPEngine

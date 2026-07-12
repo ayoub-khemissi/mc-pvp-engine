@@ -1,0 +1,52 @@
+# A map.
+#
+# You normally do not write these by hand for testing — run:
+#     /pvpadmin setup 4
+# which builds a lobby + 4 arenas in the void world and writes their map files.
+#
+# This file is the reference for when a real, designed map is dropped in:
+# put the world on the server, then describe it here. The engine only needs the
+# team spawns and the invisible wall.
+
+id: example
+world: pvp
+
+# Which game modes may use this map. Omit (or leave empty) = any mode.
+modes:
+  - duel
+
+# Which players this map is meant for (Clash-Royale style: your rating decides
+# which arena you fight in). Omit = any rating.
+#
+# The rating band is a *preference*: if no map matches a player's rating, the
+# engine still puts them on the closest compatible map rather than cancel the match.
+rating:
+  min: 0
+  max: 1199
+
+# Where each team starts. team-0 and team-1 are required; add team-2, … for more.
+spawns:
+  team-0:
+    x: 500.5
+    y: 65.0
+    z: 0.5
+    yaw: -90.0
+    pitch: 0.0
+  team-1:
+    x: 524.5
+    y: 65.0
+    z: 0.5
+    yaw: 90.0
+    pitch: 0.0
+
+# The invisible wall.
+#   cylinder -> center-x, center-z, radius, min-y, max-y   (a ring: the classic arena)
+#   cuboid   -> min-x, min-y, min-z, max-x, max-y, max-z   (a box)
+#   sphere   -> center-x, center-y, center-z, radius       (a ball: sky arenas)
+bounds:
+  type: cylinder
+  center-x: 512.0
+  center-z: 0.0
+  radius: 19.0
+  min-y: 64.0
+  max-y: 100.0

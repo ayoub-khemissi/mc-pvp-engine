@@ -1,0 +1,22 @@
+name: PvPEngine
+version: '0.1.0'
+main: fr.ayoub.pvp.core.PvPEnginePlugin
+api-version: '26.1'
+author: Ayoub
+description: Modular PvP engine (arenas, queues, ELO, talents).
+
+# Downloaded by Paper at startup — not bundled in the jar.
+libraries:
+  - com.zaxxer:HikariCP:5.1.0
+  - com.mysql:mysql-connector-j:9.1.0
+
+commands:
+  pvpadmin:
+    description: PvP Engine administration (maps, arenas, reload).
+    usage: /pvpadmin arena list | arena tp <id> | arena leave | reload
+    permission: pvpengine.admin
+
+permissions:
+  pvpengine.admin:
+    description: Administer the PvP engine.
+    default: op
