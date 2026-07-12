@@ -8,6 +8,9 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
@@ -77,18 +80,77 @@ public final class MatchListener implements Listener {
         matches.handleQuit(event.getPlayer());
     }
 
+    /**
+     * The server-side half of "you cannot break the arena".
+     *
+     * The client-side half is the game mode: a non-building match runs in ADVENTURE, where
+     * the client will not even start the break animation. This stays as the authority — a
+     * modified client is not bound by its game mode.
+     */
     @EventHandler(ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
-        if (matches.isInMatch(event.getPlayer())) {
+        matches.matchOf(event.getPlayer()).ifPresent(match -> {
+            if (!match.mode().rules().building()) {
+                event.setCancelled(true);
+            }
+        });
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPlace(BlockPlaceEvent event) {
+        matches.matchOf(event.getPlayer()).ifPresent(match -> {
+            if (!match.mode().rules().building()) {
+                event.setCancelled(true);
+            }
+        });
+    }
+
+    /**
+     * A spectator touches nothing.
+     *
+     * Minecraft's SPECTATOR mode already forbids all of this, so none of these should ever
+     * fire. They are here because "the spectator picked up the arrow that decided the
+     * round" is not a bug we are willing to find out about in production — and because an
+     * eliminated player is a spectator too, standing in a live arena.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void onPickup(EntityPickupItemEvent event) {
+        if (event.getEntity() instanceof Player player && isWatching(player)) {
             event.setCancelled(true);
         }
     }
 
     @EventHandler(ignoreCancelled = true)
-    public void onPlace(BlockPlaceEvent event) {
-        if (matches.isInMatch(event.getPlayer())) {
+    public void onInteract(PlayerInteractEvent event) {
+        Player player = event.getPlayer();
+
+        if (isWatching(player)) {
+            event.setCancelled(true);
+            return;
+        }
+        // No shooting during the countdown, the round break or the victory screen.
+        matches.matchOf(player).ifPresent(match -> {
+            if (!match.isLive()) {
+                event.setCancelled(true);
+            }
+        });
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onDrop(PlayerDropItemEvent event) {
+        if (isWatching(event.getPlayer()) || matches.isInMatch(event.getPlayer())) {
             event.setCancelled(true);
         }
+    }
+
+    /** Watching, rather than fighting: a lobby spectator, or a player already eliminated. */
+    private boolean isWatching(Player player) {
+        if (matches.isSpectating(player)) {
+            return true;
+        }
+        return matches.matchOf(player)
+                .map(match -> !match.isAlive(player))
+                .orElse(false);
     }
 
     private static boolean changedBlock(PlayerMoveEvent event) {

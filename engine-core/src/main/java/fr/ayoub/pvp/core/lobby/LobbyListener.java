@@ -68,6 +68,10 @@ public final class LobbyListener implements Listener {
         }
 
         Player player = event.getPlayer();
+        if (plugin.matches().isInMatch(player) || plugin.matches().isSpectating(player)) {
+            return;   // the lobby hotbar is not theirs to use right now
+        }
+
         hotbar.actionOf(event.getItem()).ifPresent(hotbarAction -> {
             event.setCancelled(true);
 

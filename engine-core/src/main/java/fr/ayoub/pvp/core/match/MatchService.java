@@ -122,6 +122,11 @@ public final class MatchService {
      */
     private void setUpRound(Match match) {
         match.resetAlive();
+        match.arena().clearLitter();   // no arrows or dropped items from the previous round
+
+        // ADVENTURE unless the mode is about building: in ADVENTURE the CLIENT refuses to
+        // break a block, so nothing is animated and there is nothing to cancel afterwards.
+        GameMode gameMode = match.mode().rules().building() ? GameMode.SURVIVAL : GameMode.ADVENTURE;
 
         for (Team team : match.teams()) {
             for (UUID id : team.members()) {
@@ -132,7 +137,7 @@ public final class MatchService {
 
                 plugin.arenas().enter(player, match.arena());
                 player.teleport(match.spawn(team.index()));
-                player.setGameMode(GameMode.SURVIVAL);
+                player.setGameMode(gameMode);
                 player.getInventory().clear();
                 player.getInventory().setArmorContents(null);
                 for (PotionEffect effect : new ArrayList<>(player.getActivePotionEffects())) {
@@ -280,8 +285,10 @@ public final class MatchService {
         match.state().transitionTo(MatchState.ROUND_ENDING);
 
         // The round is over: the survivors stop dead where they are, they do not get to
-        // wander around the arena while the scoreline is up.
+        // wander around the arena while the scoreline is up. And the floor is swept now,
+        // not in three seconds, so nobody watches a field of arrows.
         match.alivePlayers().forEach(Freeze::apply);
+        match.arena().clearLitter();
 
         Series series = match.series();
         boolean draw = winningTeam == MatchOutcome.NO_TEAM;
@@ -414,6 +421,9 @@ public final class MatchService {
                 spectating.remove(id);
             }
         }
+
+        // The arena goes back into the pool exactly as it was handed out.
+        match.arena().clearLitter();
 
         plugin.arenas().release(match.arena());
         active.remove(match);
