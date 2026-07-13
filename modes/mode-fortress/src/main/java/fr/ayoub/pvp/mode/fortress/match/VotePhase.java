@@ -81,12 +81,26 @@ public final class VotePhase {
             if (options.isEmpty()) {
                 continue;
             }
-
             votes.put(team.index(), new TeamVote(options));
             shown.put(team.index(), previews.getOrDefault(team.index(), List.of()));
+        }
 
-            showFortresses(team.index());
-            sendUp(team);
+        // NOBODY VOTES ON ONE FORTRESS.
+        //
+        // If neither side has more than one to choose from, there is nothing to decide: flying
+        // two teams up to a plain and making them stare at a single building for thirty seconds
+        // is a ceremony, not a choice. Take the only answer and start the match.
+        if (nothingToDecide()) {
+            decide();
+            done.run();
+            return;
+        }
+
+        for (Team team : context.teams()) {
+            if (votes.containsKey(team.index())) {
+                showFortresses(team.index());
+                sendUp(team);
+            }
         }
 
         registry.open(this);
@@ -121,8 +135,11 @@ public final class VotePhase {
             int px = FortressMapBuilder.voteSlotX(ox, cube, slot);
             int pz = FortressMapBuilder.votePlainZ(0, team);
 
+            // TURNED to face the voters. A blueprint's front is its z = 0 face, and pasting
+            // puts that face at the low z — which is the far side from where the team stands.
+            // Unturned, they were being shown three blind walls and asked to pick one.
             Fortresses.paste(context, previews.get(slot),
-                    px, FortressMapBuilder.VOTE_Y + 1, pz, false);
+                    px, FortressMapBuilder.VOTE_Y + 1, pz, true);
         }
     }
 
@@ -189,12 +206,19 @@ public final class VotePhase {
         return context.teamOf(player).map(Team::index);
     }
 
+    /** Neither side has a choice to make. */
+    private boolean nothingToDecide() {
+        return votes.values().stream().allMatch(vote -> vote.candidates().size() <= 1);
+    }
+
     private boolean everyoneHasVoted() {
         for (Team team : context.teams()) {
             TeamVote vote = votes.get(team.index());
-            if (vote == null) {
-                continue;   // this team had nothing to choose from
+
+            if (vote == null || vote.candidates().size() <= 1) {
+                continue;   // nothing to choose from: this team is not holding anyone up
             }
+
             long present = team.members().stream()
                     .map(Bukkit::getPlayer)
                     .filter(player -> player != null && player.isOnline())
@@ -258,15 +282,21 @@ public final class VotePhase {
         }
         registry.close(this);
 
+        decide();
+        clearPlains();
+        done.run();
+    }
+
+    /** Hand each team the fortress it ended up with. */
+    private void decide() {
+        over = true;
+
         for (Team team : context.teams()) {
             TeamVote vote = votes.get(team.index());
             if (vote != null) {
                 onDecided.accept(team.index(), vote.result());
             }
         }
-
-        clearPlains();
-        done.run();
     }
 
     /** Take the display fortresses down. They were scenery, and the match needs the room. */

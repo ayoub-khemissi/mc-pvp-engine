@@ -118,13 +118,25 @@ public final class FortressHandler implements MatchHandler {
         });
     }
 
+    /** Three candidates. Not one per player — <b>three</b>. */
+    private static final int CANDIDATES = 3;
+
     /**
-     * What a team gets to choose from: <b>one fortress per member — their default</b>.
+     * What a team gets to choose from: <b>the three best fortresses the team can field</b>.
      *
-     * Ordered by rating, best first, and that is not decoration. A tied vote — one-all in a
-     * 2v2, which is not an edge case but the normal case — goes to candidate 1, and candidate
-     * 1 is the best-rated player's fortress. Without the ordering the tie-break is a coin
-     * toss.
+     * It used to be one per member — their default — and that quietly killed the vote in 1v1:
+     * a team of one produced a team of one candidate, so there was nothing to choose and the
+     * default was simply taken. A player who has built three fortresses and is shown none of
+     * them has not been given a vote, they have been given a fait accompli.
+     *
+     * So the slots are filled <b>round-robin</b>, best-rated player first: everybody's default
+     * goes in, then everybody's second, until three are on the plain. In 3v3 that is one each.
+     * In 1v1 it is all three of yours. In 2v2, one each and the better player's second — which
+     * is the same rule, not a special case.
+     *
+     * The order is what settles a tied vote (see {@code TeamVote}): candidate 1 is the
+     * best-rated player's first choice. Without it, a one-all split in a 2v2 — the normal
+     * case, not an edge case — would be a coin toss.
      *
      * A team where nobody has anything playable gets nothing, and is told so: an empty pad
      * with no explanation reads as a broken server.
@@ -134,42 +146,63 @@ public final class FortressHandler implements MatchHandler {
                         Map<Integer, List<Blueprint>> previews,
                         Map<UUID, Blueprint> byFortress) {
 
-        record Entry(int rating, Candidate candidate, Blueprint blueprint) {
+        record Owner(UUID id, int rating, List<FortressLibrary.Checked> fortresses) {
         }
 
-        List<Entry> entries = new ArrayList<>();
+        List<Owner> owners = new ArrayList<>();
 
         for (UUID member : team.members()) {
-            List<FortressLibrary.Checked> playable = library.playableFor(member);
+            List<FortressLibrary.Checked> playable = new ArrayList<>(library.playableFor(member));
             if (playable.isEmpty()) {
                 continue;
             }
+            // Their default first: it is the one they meant.
+            playable.sort(Comparator.comparing(
+                    (FortressLibrary.Checked checked) -> checked.fortress().isDefault()).reversed());
 
-            // Their default if it is playable, otherwise the first one that is.
-            FortressLibrary.Checked pick = playable.stream()
-                    .filter(checked -> checked.fortress().isDefault())
-                    .findFirst()
-                    .orElse(playable.getFirst());
-
-            library.forMatch(member, pick.slot()).ifPresent(blueprint -> {
-                UUID id = UUID.randomUUID();   // this candidacy, not the row
-                byFortress.put(id, blueprint);
-
-                int rating = PvPEngineApi.lobby()
-                        .ratingOf(member, context.mode(), context.format());
-
-                entries.add(new Entry(rating, new Candidate(member, id, pick.name()), blueprint));
-            });
+            owners.add(new Owner(member, PvPEngineApi.lobby()
+                    .ratingOf(member, context.mode(), context.format()), playable));
         }
 
-        if (entries.isEmpty()) {
+        if (owners.isEmpty()) {
+            return;
+        }
+        owners.sort(Comparator.comparingInt(Owner::rating).reversed());
+
+        List<Candidate> chosen = new ArrayList<>();
+        List<Blueprint> shown = new ArrayList<>();
+
+        for (int round = 0; chosen.size() < CANDIDATES; round++) {
+            boolean anyLeft = false;
+
+            for (Owner owner : owners) {
+                if (chosen.size() >= CANDIDATES || round >= owner.fortresses().size()) {
+                    continue;
+                }
+                anyLeft = true;
+
+                FortressLibrary.Checked pick = owner.fortresses().get(round);
+
+                library.forMatch(owner.id(), pick.slot()).ifPresent(blueprint -> {
+                    UUID candidacy = UUID.randomUUID();   // this offer, not the row
+                    byFortress.put(candidacy, blueprint);
+
+                    chosen.add(new Candidate(owner.id(), candidacy, pick.name()));
+                    shown.add(blueprint);
+                });
+            }
+
+            if (!anyLeft) {
+                break;   // the team has fewer than three fortresses between them
+            }
+        }
+
+        if (chosen.isEmpty()) {
             return;
         }
 
-        entries.sort(Comparator.comparingInt(Entry::rating).reversed());
-
-        candidates.put(team.index(), entries.stream().map(Entry::candidate).toList());
-        previews.put(team.index(), entries.stream().map(Entry::blueprint).toList());
+        candidates.put(team.index(), chosen);
+        previews.put(team.index(), shown);
     }
 
     /** The vote is in. Stand this team's fortress on its pad. */

@@ -46,7 +46,7 @@ public final class FortressMapBuilder {
      * that already had version 1 maps would otherwise keep them, and its players would be
      * teleported to a voting plain that was never built.
      */
-    public static final int MAP_VERSION = 3;
+    public static final int MAP_VERSION = 4;
 
     public static final int SIZE = 128;          // the island, in blocks
     public static final int SPACING = 256;       // between two instances
@@ -69,8 +69,17 @@ public final class FortressMapBuilder {
     public static final int VOTE_Y = 130;
     private static final int VOTE_Z_TEAM_0 = 300;
     private static final int VOTE_Z_TEAM_1 = 600;
-    private static final int VOTE_GAP = 6;       // between two fortresses on display
-    private static final int VOTE_APRON = 10;    // where the voters stand, in front of them
+    private static final int VOTE_GAP = 8;       // between two fortresses on display
+
+    /**
+     * How far back the voters stand.
+     *
+     * It was ten, which put a player's face against the middle sign with three fortresses
+     * looming over them — you cannot choose between three buildings you are standing inside.
+     * Forty is far enough back to see all three at once, which is the entire job of this
+     * place.
+     */
+    private static final int VOTE_APRON = 40;
 
     private final Plugin plugin;
     private final FortressConfig config;
@@ -149,11 +158,11 @@ public final class FortressMapBuilder {
                 }
             }
 
-            // 1, 2, 3 — on the floor, in front of each fortress, so the number on the ground
-            // is the number in your hand. Nobody should have to work out which is which.
+            // 1, 2, 3 — on the floor AT THE FOOT OF EACH FORTRESS, not at the voter's feet.
+            // The number belongs to the building, not to the place you happen to be standing.
             for (int slot = 0; slot < 3; slot++) {
                 int sx = px + slot * (cube + VOTE_GAP) + cube / 2;
-                int sz = pz + depth - 3;
+                int sz = pz + cube + 2;
 
                 world.getBlockAt(sx, VOTE_Y, sz).setType(Material.GOLD_BLOCK, false);
                 Block sign = world.getBlockAt(sx, VOTE_Y + 1, sz);
@@ -186,16 +195,19 @@ public final class FortressMapBuilder {
         return votePlainX(ox) + slot * (cube + VOTE_GAP);
     }
 
-    /** Where the team stands: in front of their three, looking at them. */
+    /** Where the team stands: forty blocks back, centred, looking at all three at once. */
     public static Location voteSpawn(World world, int index, int cube, int team) {
         int ox = index * SPACING;
         int oz = 0;
 
         double x = votePlainX(ox) + (3 * cube + 2 * VOTE_GAP) / 2.0;
-        double z = votePlainZ(oz, team) + cube + VOTE_APRON - 1.5;
+        double z = votePlainZ(oz, team) + cube + VOTE_APRON - 2.5;
 
-        Location at = new Location(world, x, VOTE_Y + 1, z);
-        at.setYaw(180f);   // looking back down the plain, at the fortresses
+        // A little above the floor: the three of them are twenty blocks tall, and you want to
+        // see the roofs, not three walls.
+        Location at = new Location(world, x, VOTE_Y + 4, z);
+        at.setYaw(180f);    // looking back down the plain, at the fortresses
+        at.setPitch(5f);
         return at;
     }
 
