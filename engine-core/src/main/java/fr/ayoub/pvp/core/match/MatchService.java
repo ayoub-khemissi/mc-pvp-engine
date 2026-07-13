@@ -81,6 +81,13 @@ public final class MatchService {
         return List.copyOf(active);
     }
 
+    /** Which match, if any, owns this piece of the world. */
+    public Optional<Match> matchAt(Location location) {
+        return active.stream()
+                .filter(match -> match.arena().contains(location))
+                .findFirst();
+    }
+
     // --- starting --------------------------------------------------------------
 
     /**
@@ -592,7 +599,14 @@ public final class MatchService {
             }
         }
 
-        // The arena goes back into the pool exactly as it was handed out.
+        // The arena goes back into the pool exactly as it was handed out — which, on a map
+        // people are allowed to dig, means putting every block they moved back where it was.
+        // Without this the second match on an island is played in the ruins of the first.
+        int restored = match.journal().restore();
+        if (restored > 0) {
+            plugin.getLogger().info("Restored " + restored + " block(s) in " + match.arena().id());
+        }
+
         match.arena().clearLitter();
 
         plugin.arenas().release(match.arena());

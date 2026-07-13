@@ -280,10 +280,6 @@ public final class FortressMapBuilder {
                 new ItemStack(Material.GOLDEN_APPLE, 1),
                 new ItemStack(Material.BREAD, 8)));
 
-        spawn(world, cx, floor + 1, cz + 3, EntityType.SPIDER);
-        spawn(world, cx - 3, floor + 1, cz - 2, EntityType.SPIDER);
-        spawn(world, cx + 2, floor + 1, cz - 4, EntityType.SKELETON);
-
         return blocks;
     }
 
@@ -322,9 +318,48 @@ public final class FortressMapBuilder {
                 new ItemStack(Material.COOKED_BEEF, 6),
                 new ItemStack(Material.OAK_PLANKS, 32)));
 
-        spawn(world, hx + 3, SURFACE_Y + 1, hz + 3, EntityType.ZOMBIE);
-
         return blocks;
+    }
+
+    // --- the mobs -----------------------------------------------------------------------
+
+    /** A creature the map put somewhere on purpose. */
+    public record Mob(Location at, EntityType type) {
+    }
+
+    /**
+     * Where the map wants the danger to be — as <b>data</b>, not as a side effect of building.
+     *
+     * A mob killed in a match does not come back, and blocks are the only thing the engine's
+     * journal can put back: it restores the world, not the things walking around in it. So
+     * the mobs cannot be placed once, while the island is built. They have to be a list the
+     * <b>match</b> can ask for and set up again, every time.
+     */
+    public static List<Mob> mobs(World world, int index) {
+        int ox = index * SPACING;
+        int oz = 0;
+
+        int cx = ox + 24;
+        int cz = oz + SIZE / 2;
+        int floor = BEDROCK_Y + 6;
+
+        int hx = ox + SIZE - 30;
+        int hz = oz + SIZE / 2;
+
+        return List.of(
+                new Mob(new Location(world, cx + 0.5, floor + 1, cz + 3.5), EntityType.SPIDER),
+                new Mob(new Location(world, cx - 2.5, floor + 1, cz - 1.5), EntityType.SPIDER),
+                new Mob(new Location(world, cx + 2.5, floor + 1, cz - 3.5), EntityType.SKELETON),
+                new Mob(new Location(world, hx + 3.5, SURFACE_Y + 1, hz + 3.5), EntityType.ZOMBIE));
+    }
+
+    /** "fortress-3" → 2. The instance an arena is, which is what its layout is keyed on. */
+    public static int indexOf(String arenaId) {
+        try {
+            return Integer.parseInt(arenaId.substring(arenaId.lastIndexOf('-') + 1)) - 1;
+        } catch (RuntimeException e) {
+            return -1;
+        }
     }
 
     // --- the wall around it -----------------------------------------------------------

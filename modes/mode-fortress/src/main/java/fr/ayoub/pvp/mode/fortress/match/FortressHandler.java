@@ -10,6 +10,7 @@ import fr.ayoub.pvp.domain.fortress.BlockPos;
 import fr.ayoub.pvp.domain.fortress.Blueprint;
 import fr.ayoub.pvp.domain.fortress.CubeRotation;
 import fr.ayoub.pvp.mode.fortress.FortressConfig;
+import fr.ayoub.pvp.mode.fortress.map.FortressMapBuilder;
 import fr.ayoub.pvp.mode.fortress.storage.FortressLibrary;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
@@ -21,7 +22,9 @@ import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.block.structure.StructureRotation;
 import org.bukkit.entity.EnderCrystal;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
@@ -104,6 +107,7 @@ public final class FortressHandler implements MatchHandler {
                     paste(context, team.index(), blueprint);
                 }
 
+                resetMobs(context);
                 showBars(context);
                 ready.run();
             });
@@ -166,11 +170,18 @@ public final class FortressHandler implements MatchHandler {
                     }
                     BlockPos to = rotation.apply(from, size);
 
-                    place(context.world().getBlockAt(
-                                    pad.getBlockX() + to.x(),
-                                    pad.getBlockY() + to.y(),
-                                    pad.getBlockZ() + to.z()),
-                            blueprint.get(from), blocks);
+                    Block block = context.world().getBlockAt(
+                            pad.getBlockX() + to.x(),
+                            pad.getBlockY() + to.y(),
+                            pad.getBlockZ() + to.z());
+
+                    // The engine watches what PLAYERS do to the map and puts it back. It
+                    // cannot see this: we are writing blocks directly, no event fires, and a
+                    // fortress nobody journalled would still be standing when the next match
+                    // began. One line, and it comes down with everything else.
+                    context.rememberBlock(block.getLocation());
+
+                    place(block, blueprint.get(from), blocks);
                 }
             }
         }
@@ -211,6 +222,42 @@ public final class FortressHandler implements MatchHandler {
         Crystal crystal = new Crystal(team, entity, config.crystalHealth());
         crystals.put(team, crystal);
         registry.register(this, crystal);
+    }
+
+    /**
+     * Put the map's creatures back.
+     *
+     * The engine's journal restores <b>blocks</b>. It cannot restore a zombie: nothing about
+     * killing one changes a block, so nothing was written down, and the second match on this
+     * island would find the cave already cleared and the hut already empty — the fights the
+     * map was built around, already had.
+     *
+     * So the mobs are not part of the terrain. They are part of the <b>match</b>, and they are
+     * set up like everything else in it: wipe whatever survived the last one, place the list
+     * again.
+     */
+    private void resetMobs(MatchContext context) {
+        int index = FortressMapBuilder.indexOf(context.arenaId());
+        if (index < 0) {
+            return;   // a designer's map: its mobs are its own business
+        }
+
+        // Only OUR island. Every instance shares one world, and another match is very
+        // probably being fought two hundred blocks away — clearing "the monsters in the
+        // world" would empty their cave in the middle of their game.
+        int from = index * FortressMapBuilder.SPACING;
+        int to = from + FortressMapBuilder.SIZE;
+
+        for (Entity entity : context.world().getEntities()) {
+            int x = entity.getLocation().getBlockX();
+            if (entity instanceof Monster && x >= from && x < to) {
+                entity.remove();
+            }
+        }
+
+        for (FortressMapBuilder.Mob mob : FortressMapBuilder.mobs(context.world(), index)) {
+            context.world().spawnEntity(mob.at(), mob.type());
+        }
     }
 
     // --- the crystal being broken -------------------------------------------------------

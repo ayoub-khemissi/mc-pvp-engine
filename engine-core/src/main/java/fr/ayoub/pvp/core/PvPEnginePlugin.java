@@ -8,6 +8,7 @@ import fr.ayoub.pvp.core.arena.WallListener;
 import fr.ayoub.pvp.core.lobby.CoreLobby;
 import fr.ayoub.pvp.core.lobby.HotbarItems;
 import fr.ayoub.pvp.core.lobby.LobbyListener;
+import fr.ayoub.pvp.core.arena.RestoreListener;
 import fr.ayoub.pvp.core.lobby.LobbyService;
 import fr.ayoub.pvp.core.match.GameModeRegistry;
 import fr.ayoub.pvp.core.match.MatchListener;
@@ -125,6 +126,7 @@ public final class PvPEnginePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new LobbyListener(this, lobbyService, hotbarItems), this);
         getServer().getPluginManager().registerEvents(new WallListener(arenaService), this);
         getServer().getPluginManager().registerEvents(new MatchListener(matchService), this);
+        getServer().getPluginManager().registerEvents(new RestoreListener(matchService), this);
 
         AdminCommand admin = new AdminCommand(this, arenaService);
         getCommand("pvpadmin").setExecutor(admin);

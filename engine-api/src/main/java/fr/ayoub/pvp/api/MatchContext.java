@@ -71,6 +71,19 @@ public interface MatchContext {
 
     void title(Component title, Component subtitle);
 
+    /**
+     * "I am about to change this block. Remember what it was."
+     *
+     * The engine already watches everything a <b>player</b> does to a destructible arena, and
+     * puts it back when the match ends. It cannot watch what a mode does directly: Fortress
+     * pastes eight thousand blocks onto a pad without firing a single event, and those blocks
+     * would still be standing when the next match started.
+     *
+     * Call this before writing, and the block goes back with all the others. Calling it twice
+     * on the same block is free — only the first state is kept, which is the one that matters.
+     */
+    void rememberBlock(Location location);
+
     /** How many kills a team has. The engine counts them; a mode decides what they are worth. */
     int kills(int team);
 
