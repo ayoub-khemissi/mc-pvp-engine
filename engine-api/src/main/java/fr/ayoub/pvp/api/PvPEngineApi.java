@@ -16,21 +16,32 @@ import java.util.Optional;
 public final class PvPEngineApi {
 
     private static Registry registry;
+    private static EngineStorage storage;
 
     private PvPEngineApi() {
     }
 
     /** Called by the engine on enable. Not for mode plugins. */
-    public static void init(Registry implementation) {
-        registry = implementation;
+    public static void init(Registry registryImpl, EngineStorage storageImpl) {
+        registry = registryImpl;
+        storage = storageImpl;
     }
 
     public static Registry modes() {
-        if (registry == null) {
+        return require(registry);
+    }
+
+    /** The database — for a mode that has things to remember. It owns its own tables. */
+    public static EngineStorage storage() {
+        return require(storage);
+    }
+
+    private static <T> T require(T service) {
+        if (service == null) {
             throw new IllegalStateException(
                     "PvP Engine is not enabled yet — add 'depend: [PvPEngine]' to your plugin.yml");
         }
-        return registry;
+        return service;
     }
 
     /** Where game modes announce themselves. */

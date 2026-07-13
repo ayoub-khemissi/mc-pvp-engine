@@ -7,3 +7,4 @@ include("engine-core")
 
 // Game modes. Each one is its own plugin — the engine knows nothing about them.
 include("modes:mode-duel")
+include("modes:mode-fortress")

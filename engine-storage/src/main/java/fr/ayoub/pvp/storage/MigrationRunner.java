@@ -38,14 +38,33 @@ public final class MigrationRunner {
         this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
     }
 
+    /** The engine's own tables. */
     public void migrate() {
+        migrate("", MigrationRunner.class.getClassLoader(), PATH, MIGRATIONS);
+    }
+
+    /**
+     * A <b>game mode's</b> tables, from that mode's own jar.
+     *
+     * A mode owns its schema: the engine must not grow a "fortresses" table, or every new
+     * mode becomes an engine change. It gets the same guarantees as the engine's own
+     * migrations — applied once each, in order, one transaction apiece — and its versions
+     * are namespaced in {@code schema_migrations} so two modes can both ship a "V1".
+     *
+     * @param namespace the mode id, e.g. "fortress". Empty for the engine.
+     * @param loader    the mode plugin's class loader — its jar is where the .sql files are
+     * @param path      resource folder, e.g. {@code /db/fortress/}
+     * @param versions  file names, in the order they must run
+     */
+    public void migrate(String namespace, ClassLoader loader, String path, List<String> versions) {
         try (Connection connection = dataSource.getConnection()) {
             createHistoryTable(connection);
             Set<String> applied = appliedVersions(connection);
 
-            for (String version : MIGRATIONS) {
-                if (!applied.contains(version)) {
-                    apply(connection, version);
+            for (String version : versions) {
+                String key = namespace.isBlank() ? version : namespace + "/" + version;
+                if (!applied.contains(key)) {
+                    apply(connection, key, read(loader, path + version, version));
                 }
             }
         } catch (SQLException e) {
@@ -77,8 +96,8 @@ public final class MigrationRunner {
     }
 
     /** One migration = one transaction. It either fully applies, or not at all. */
-    private void apply(Connection connection, String version) throws SQLException {
-        List<String> statements = split(read(version));
+    private void apply(Connection connection, String version, String script) throws SQLException {
+        List<String> statements = split(script);
 
         boolean autoCommit = connection.getAutoCommit();
         connection.setAutoCommit(false);
@@ -121,10 +140,13 @@ public final class MigrationRunner {
         return statements;
     }
 
-    private static String read(String version) {
-        try (InputStream in = MigrationRunner.class.getResourceAsStream(PATH + version)) {
+    private static String read(ClassLoader loader, String resource, String version) {
+        // A ClassLoader wants no leading slash; a Class does. Accept both.
+        String path = resource.startsWith("/") ? resource.substring(1) : resource;
+
+        try (InputStream in = loader.getResourceAsStream(path)) {
             if (in == null) {
-                throw new IllegalStateException("migration file not found: " + PATH + version);
+                throw new IllegalStateException("migration file not found: " + path);
             }
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
