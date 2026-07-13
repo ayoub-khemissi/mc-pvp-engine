@@ -22,6 +22,11 @@ public record MapDescriptor(String id, Set<String> modes, int minRating, int max
         return modes.isEmpty() || modes.contains(modeId);
     }
 
+    /** Built <b>for</b> this mode, and says so. Not merely "does not object to it". */
+    public boolean isDedicatedTo(String modeId) {
+        return modes.contains(modeId);
+    }
+
     public boolean fits(int rating) {
         return rating >= minRating && rating <= maxRating;
     }

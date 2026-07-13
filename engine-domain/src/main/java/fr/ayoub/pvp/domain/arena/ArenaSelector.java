@@ -24,8 +24,23 @@ public final class ArenaSelector {
     }
 
     public static Optional<MapDescriptor> select(List<MapDescriptor> freeMaps, String modeId, int rating) {
+        return select(freeMaps, modeId, rating, false);
+    }
+
+    /**
+     * @param dedicatedOnly the mode refuses a general-purpose map.
+     *                      <p>
+     *                      A map that names no mode means "any mode", which is a fine default
+     *                      for a plain arena — until a mode turns up that cannot possibly be
+     *                      played on one. Fortress needs two fortress pads, resources and a
+     *                      destructible floor; dropped onto a duel island it produces a match
+     *                      that starts and can never be won. Such a mode says so, and then it
+     *                      only ever lands on a map that names it.
+     */
+    public static Optional<MapDescriptor> select(List<MapDescriptor> freeMaps, String modeId,
+                                                 int rating, boolean dedicatedOnly) {
         List<MapDescriptor> compatible = freeMaps.stream()
-                .filter(map -> map.supports(modeId))
+                .filter(map -> dedicatedOnly ? map.isDedicatedTo(modeId) : map.supports(modeId))
                 .toList();
 
         if (compatible.isEmpty()) {

@@ -76,7 +76,7 @@ public final class QueueService {
         Optional<Party> party = plugin.parties().partyOf(player);
         List<Player> group = party.map(plugin.parties()::onlineMembers).orElse(List.of(player));
 
-        if (!mayQueue(player, party.orElse(null), group, format)) {
+        if (!mayQueue(player, mode, party.orElse(null), group, format)) {
             return;
         }
 
@@ -132,7 +132,8 @@ public final class QueueService {
     }
 
     /** Every reason a group cannot enter this queue, each with its own message. */
-    private boolean mayQueue(Player player, Party party, List<Player> group, Format format) {
+    private boolean mayQueue(Player player, GameModeDefinition mode, Party party,
+                             List<Player> group, Format format) {
         if (plugin.matches().isInMatch(player)) {
             player.sendMessage(Component.text("You are already in a match.", NamedTextColor.RED));
             return false;
@@ -140,6 +141,14 @@ public final class QueueService {
         if (plugin.matches().isSpectating(player)) {
             player.sendMessage(Component.text(
                     "Stop spectating first — sneak (Shift) to leave.", NamedTextColor.RED));
+            return false;
+        }
+
+        // A mode with no map is not "waiting for a free arena", it is unplayable. Say so,
+        // instead of putting them in a queue that can never produce a match.
+        if (!plugin.arenas().hasMapFor(mode)) {
+            player.sendMessage(Component.text("There is no map for " + mode.id() + " yet.",
+                    NamedTextColor.RED));
             return false;
         }
 

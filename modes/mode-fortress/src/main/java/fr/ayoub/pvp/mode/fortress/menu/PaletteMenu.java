@@ -5,6 +5,7 @@ import fr.ayoub.pvp.api.ui.Menu;
 import fr.ayoub.pvp.domain.fortress.Blueprint;
 import fr.ayoub.pvp.domain.fortress.BuildRules;
 import fr.ayoub.pvp.domain.ui.MenuLayout;
+import fr.ayoub.pvp.mode.fortress.PlacingItems;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
@@ -46,7 +47,11 @@ public final class PaletteMenu extends Menu {
 
         for (int i = 0; i < shown.size(); i++) {
             String id = shown.get(i);
-            Material material = Material.matchMaterial(id);
+
+            // The ICON is the item that places the block, not the block: redstone dust on
+            // the ground is REDSTONE_WIRE, which has no item form at all and throws if you
+            // ask for one. That is what was killing this screen halfway down page two.
+            Material material = PlacingItems.of(id);
             if (material == null) {
                 continue;
             }

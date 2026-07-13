@@ -83,7 +83,7 @@ public final class MatchService {
      */
     public Optional<Match> start(GameModeDefinition mode, Format format,
                                  List<List<UUID>> teamMembers, int averageRating) {
-        Optional<Arena> arena = plugin.arenas().allocate(mode.id(), averageRating);
+        Optional<Arena> arena = plugin.arenas().allocate(mode, averageRating);
         if (arena.isEmpty()) {
             return Optional.empty();
         }

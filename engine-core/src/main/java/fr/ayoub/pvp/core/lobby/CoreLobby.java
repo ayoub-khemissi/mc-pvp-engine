@@ -4,7 +4,11 @@ import fr.ayoub.pvp.api.EngineLobby;
 import fr.ayoub.pvp.api.GameModeDefinition;
 import fr.ayoub.pvp.core.PvPEnginePlugin;
 import fr.ayoub.pvp.domain.match.Format;
+import fr.ayoub.pvp.domain.party.Party;
 import org.bukkit.entity.Player;
+
+import java.util.List;
+import java.util.UUID;
 
 /** The engine's side of {@link EngineLobby}. A thin pass-through — that is the point. */
 public final class CoreLobby implements EngineLobby {
@@ -38,5 +42,12 @@ public final class CoreLobby implements EngineLobby {
     @Override
     public void sendToLobby(Player player) {
         plugin.lobby().send(player);
+    }
+
+    @Override
+    public List<UUID> partyMembers(Player player) {
+        return plugin.parties().partyOf(player)
+                .map(Party::members)
+                .orElse(List.of());
     }
 }

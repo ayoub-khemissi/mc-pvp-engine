@@ -6,6 +6,7 @@ import fr.ayoub.pvp.domain.fortress.BuildReport;
 import fr.ayoub.pvp.domain.fortress.Blueprint;
 import fr.ayoub.pvp.domain.fortress.FortressValidator;
 import fr.ayoub.pvp.mode.fortress.FortressConfig;
+import fr.ayoub.pvp.mode.fortress.PlacingItems;
 import fr.ayoub.pvp.mode.fortress.storage.FortressRepository;
 import fr.ayoub.pvp.mode.fortress.storage.SavedFortress;
 import net.kyori.adventure.text.Component;
@@ -21,10 +22,10 @@ import org.bukkit.entity.EnderCrystal;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
-import fr.ayoub.pvp.mode.fortress.FortressConfig;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -45,6 +46,9 @@ public final class BuildZoneService {
 
     private static final int ROOM_Y = 64;
 
+    /** Two sneaks within this delay mean "let me out", one means "go down". */
+    private static final long DOUBLE_SNEAK_MILLIS = 500L;
+
     private static final Material FLOOR = Material.SMOOTH_STONE;
     private static final Material CUBE_FLOOR = Material.POLISHED_ANDESITE;   // shows where the cube is
     private static final Material WALL = Material.BARRIER;
@@ -54,6 +58,11 @@ public final class BuildZoneService {
     private final FortressRepository fortresses;
 
     private final Map<UUID, BuildSession> sessions = new HashMap<>();
+
+    /** Who is watching whom build. A watcher is never a builder. */
+    private final Map<UUID, UUID> watchers = new HashMap<>();
+    private final Map<UUID, Long> lastSneak = new HashMap<>();
+
     private final Set<Integer> occupied = new HashSet<>();
     private final Set<Integer> built = new HashSet<>();
 
@@ -162,7 +171,7 @@ public final class BuildZoneService {
                 sessions.put(id, new BuildSession(id, zone, slot, name, blueprint));
 
                 player.setGameMode(GameMode.CREATIVE);
-                giveHotbar(player);
+                giveBuildingKit(player);
                 player.teleport(zone.spawn());
                 player.setAllowFlight(true);
 
@@ -262,6 +271,7 @@ public final class BuildZoneService {
             sessions.remove(player.getUniqueId());
         }
 
+        dismissWatchers(player.getUniqueId());
         clearCube(session.zone());
         release(session.zone());
 
@@ -269,12 +279,119 @@ public final class BuildZoneService {
         PvPEngineApi.lobby().sendToLobby(player);
     }
 
+    // --- watching a teammate build ---------------------------------------------------
+
+    public boolean isWatching(Player player) {
+        return watchers.containsKey(player.getUniqueId());
+    }
+
+    /** Everyone in this player's party who is in a build zone right now. */
+    public List<Player> buildingPartyMembers(Player player) {
+        List<Player> building = new ArrayList<>();
+
+        for (UUID member : PvPEngineApi.lobby().partyMembers(player)) {
+            if (member.equals(player.getUniqueId())) {
+                continue;
+            }
+            Player other = Bukkit.getPlayer(member);
+            if (other != null && isBuilding(other)) {
+                building.add(other);
+            }
+        }
+        return building;
+    }
+
+    /**
+     * Watch a party member build.
+     *
+     * A watcher is put in SPECTATOR: they fly, they pass through the walls, they cannot
+     * touch a block, and — this is the part that matters — they have <b>no session</b>. Every
+     * rule in {@link BuildListener} keys off the session, so a watcher is structurally
+     * incapable of editing somebody else's fortress. It is not a permission check that can
+     * be forgotten; there is simply nothing for them to edit with.
+     */
+    public void watch(Player viewer, Player builder) {
+        BuildSession session = sessions.get(builder.getUniqueId());
+
+        if (session == null || isBuilding(viewer) || isWatching(viewer)) {
+            return;
+        }
+        if (!PvPEngineApi.lobby().partyMembers(viewer).contains(builder.getUniqueId())) {
+            viewer.sendMessage(Component.text("You can only watch your own party.",
+                    NamedTextColor.RED));
+            return;
+        }
+
+        watchers.put(viewer.getUniqueId(), builder.getUniqueId());
+
+        viewer.setGameMode(GameMode.SPECTATOR);
+        viewer.teleport(session.zone().center());
+
+        viewer.sendMessage(Component.text("Watching ", NamedTextColor.AQUA)
+                .append(Component.text(builder.getName(), NamedTextColor.WHITE))
+                .append(Component.text(" build ", NamedTextColor.AQUA))
+                .append(Component.text(session.name(), NamedTextColor.WHITE)));
+        viewer.sendMessage(Component.text("Double-Shift to go back to the lobby.",
+                NamedTextColor.GRAY));
+
+        builder.sendMessage(Component.text(viewer.getName() + " is watching you build.",
+                NamedTextColor.GRAY));
+    }
+
+    public void stopWatching(Player viewer) {
+        if (watchers.remove(viewer.getUniqueId()) == null) {
+            return;
+        }
+        lastSneak.remove(viewer.getUniqueId());
+
+        if (viewer.isOnline()) {
+            PvPEngineApi.lobby().sendToLobby(viewer);
+        }
+    }
+
+    /**
+     * Sneak is the only key a spectator can send the server — and it is also how they fly
+     * down. So one sneak descends, two in quick succession leave. Same rule as the engine's
+     * match spectator, because a player should not have to learn it twice.
+     */
+    public void handleWatcherSneak(Player viewer) {
+        if (!isWatching(viewer)) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        Long previous = lastSneak.put(viewer.getUniqueId(), now);
+
+        if (previous != null && now - previous <= DOUBLE_SNEAK_MILLIS) {
+            stopWatching(viewer);
+        }
+    }
+
+    /** The builder left. Nobody stays behind, staring at an empty room. */
+    private void dismissWatchers(UUID builder) {
+        for (UUID id : Set.copyOf(watchers.keySet())) {
+            if (!builder.equals(watchers.get(id))) {
+                continue;
+            }
+            Player viewer = Bukkit.getPlayer(id);
+            if (viewer == null) {
+                watchers.remove(id);
+                continue;
+            }
+            viewer.sendMessage(Component.text("They stopped building.", NamedTextColor.YELLOW));
+            stopWatching(viewer);
+        }
+    }
+
     /** A builder disconnected. Their zone must not stay locked forever. */
     public void abandon(Player player) {
+        stopWatching(player);
+
         BuildSession session = sessions.remove(player.getUniqueId());
         if (session == null) {
             return;
         }
+        dismissWatchers(player.getUniqueId());
         clearCube(session.zone());
         release(session.zone());
     }
@@ -291,25 +408,48 @@ public final class BuildZoneService {
     // --- zones -------------------------------------------------------------------
 
     /**
-     * The hotbar: the eight best blocks, hardest first, and the End Crystal on the far
-     * right — where a player's eye goes for the thing that matters most.
+     * The builder's kit: the whole palette, laid out.
      *
-     * The creative inventory is still there for the rest of the palette. This is only about
-     * not making somebody search for obsidian every time they log in.
+     * The hotbar holds the eight best blocks, hardest first, with the End Crystal on the far
+     * right — where the eye goes for the thing that decides the match. The rest of the
+     * palette fills the inventory below it, in the same order.
+     *
+     * Nobody should have to hunt through the creative inventory for a block the mode has
+     * already decided they may use. The creative inventory is still there for the rest.
      */
-    private void giveHotbar(Player player) {
+    private void giveBuildingKit(Player player) {
         player.getInventory().clear();
 
-        List<String> blocks = config.hotbarBlocks();
-        for (int slot = 0; slot < blocks.size() && slot < FortressConfig.HOTBAR_BLOCKS; slot++) {
-            Material material = Material.matchMaterial(blocks.get(slot));
-            if (material != null) {
-                player.getInventory().setItem(slot, new ItemStack(material, 64));
+        List<String> ordered = config.paletteByStrength();
+
+        // Hotbar: the best eight.
+        int hotbar = 0;
+        int index = 0;
+        for (; index < ordered.size() && hotbar < FortressConfig.HOTBAR_BLOCKS; index++) {
+            ItemStack item = stackOf(ordered.get(index));
+            if (item != null) {
+                player.getInventory().setItem(hotbar++, item);
             }
         }
 
         player.getInventory().setItem(8, new ItemStack(Material.END_CRYSTAL, 1));
+
+        // Everything else, filling the three rows of the inventory proper.
+        int slot = 9;
+        for (; index < ordered.size() && slot < 36; index++) {
+            ItemStack item = stackOf(ordered.get(index));
+            if (item != null) {
+                player.getInventory().setItem(slot++, item);
+            }
+        }
+
         player.getInventory().setHeldItemSlot(0);
+    }
+
+    /** A block is not always an item — redstone dust on the ground has no item form. */
+    private static ItemStack stackOf(String blockId) {
+        Material item = PlacingItems.of(blockId);
+        return item == null ? null : new ItemStack(item, 64);
     }
 
     private Optional<BuildZone> allocate() {

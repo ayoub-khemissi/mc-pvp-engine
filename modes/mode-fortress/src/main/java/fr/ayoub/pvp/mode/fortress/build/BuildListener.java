@@ -18,12 +18,14 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerToggleSneakEvent;
 
 /**
  * The rules of a build zone, enforced as they are broken rather than at save time.
@@ -316,9 +318,31 @@ public final class BuildListener implements Listener {
         }
     }
 
+    /** A watcher leaves by sneaking twice — one sneak still flies them down. */
+    @EventHandler
+    public void onSneak(PlayerToggleSneakEvent event) {
+        if (event.isSneaking()) {
+            zones.handleWatcherSneak(event.getPlayer());
+        }
+    }
+
+    /**
+     * A watcher touches nothing.
+     *
+     * SPECTATOR already forbids all of this, and a watcher has no session, so every rule
+     * above refuses them anyway. This is the belt on top of the braces: "somebody's mate
+     * edited their fortress while watching" is not a bug I want to hear about from a player.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void onWatcherPickup(EntityPickupItemEvent event) {
+        if (event.getEntity() instanceof Player player && zones.isWatching(player)) {
+            event.setCancelled(true);
+        }
+    }
+
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        zones.abandon(event.getPlayer());
+        zones.abandon(event.getPlayer());   // handles both builders and watchers
     }
 
     private boolean inBuildWorld(String worldName) {

@@ -3,13 +3,17 @@ package fr.ayoub.pvp.api;
 import fr.ayoub.pvp.domain.match.Format;
 import org.bukkit.entity.Player;
 
+import java.util.List;
+import java.util.UUID;
+
 /**
- * The lobby and the queues, opened to a game mode.
+ * The lobby, the queues and the parties, opened to a game mode.
  *
- * A mode with a screen of its own needs exactly three things from the engine, and none of
+ * A mode with a screen of its own needs a handful of things from the engine, and none of
  * them require the engine to know which mode is asking: put this player in a queue, take
- * them out of it, and send them home. Fortress needs all three — its own menu queues for
- * 1v1/2v2/3v3 and sends people to a build zone they must come back from.
+ * them out of it, send them home — and tell me who they are playing with. Fortress needs
+ * all of them: its menu queues for 1v1/2v2/3v3, it sends people to a build zone they must
+ * come back from, and a builder's friends can come and watch them build.
  */
 public interface EngineLobby {
 
@@ -24,4 +28,13 @@ public interface EngineLobby {
 
     /** Back to the lobby: clean inventory, adventure mode, hotbar. Always safe to call. */
     void sendToLobby(Player player);
+
+    /**
+     * Who this player is grouped with, leader first. Empty if they are not in a party.
+     *
+     * A mode does not get to change a party — it only gets to ask. That is enough for the
+     * things a mode actually wants: letting friends watch each other, showing a teammate's
+     * rating, refusing a format the group is too big for.
+     */
+    List<UUID> partyMembers(Player player);
 }

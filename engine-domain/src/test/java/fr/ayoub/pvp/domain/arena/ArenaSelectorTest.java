@@ -26,6 +26,50 @@ class ArenaSelectorTest {
         return new MapDescriptor(id, Set.of(), 0, Integer.MAX_VALUE);
     }
 
+    // --- a mode that cannot be played on a general-purpose arena --------------------
+
+    @Test
+    void aModeThatNeedsItsOwnMapWillNotTakeAGeneralPurposeOne() {
+        // The bug: the dev arenas name no mode, which means "any mode", so Fortress was
+        // handed a duel island — a match that starts and can never be won.
+        List<MapDescriptor> maps = List.of(anyMap("duel-island"));
+
+        assertTrue(ArenaSelector.select(maps, "fortress", 1000, true).isEmpty());
+        assertTrue(ArenaSelector.select(maps, "fortress", 1000).isPresent(),
+                "a mode that does not ask for a dedicated map still plays on it");
+    }
+
+    @Test
+    void aModeThatNeedsItsOwnMapTakesTheOneMadeForIt() {
+        List<MapDescriptor> maps = List.of(
+                anyMap("duel-island"),
+                map("fortress-valley", Set.of("fortress"), 0, Integer.MAX_VALUE));
+
+        assertEquals("fortress-valley",
+                ArenaSelector.select(maps, "fortress", 1000, true).orElseThrow().id());
+    }
+
+    @Test
+    void aDedicatedMapIsStillPickedByRating() {
+        List<MapDescriptor> maps = List.of(
+                map("fortress-bronze", Set.of("fortress"), 0, 1199),
+                map("fortress-gold", Set.of("fortress"), 1200, 9999));
+
+        assertEquals("fortress-gold",
+                ArenaSelector.select(maps, "fortress", 1500, true).orElseThrow().id());
+    }
+
+    @Test
+    void aMapDeclaresWhatItIsFor() {
+        MapDescriptor general = anyMap("anything");
+        MapDescriptor fortress = map("valley", Set.of("fortress"), 0, 9999);
+
+        assertTrue(general.supports("fortress"), "no modes listed means it objects to none");
+        assertFalse(general.isDedicatedTo("fortress"), "but it was not built for one either");
+        assertTrue(fortress.isDedicatedTo("fortress"));
+        assertFalse(fortress.isDedicatedTo("duel"));
+    }
+
     @Test
     void nothingAvailableMeansNoMap() {
         assertTrue(ArenaSelector.select(List.of(), "duel", 1000).isEmpty());

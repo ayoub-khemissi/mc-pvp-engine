@@ -78,6 +78,18 @@ public final class FortressMode implements GameModeDefinition {
     }
 
     /**
+     * A duel island is not a fortress map.
+     *
+     * It has no pads to paste a fortress onto, no resources to mine, and a floor nobody can
+     * dig — so a Fortress match played on one starts and can never be won. Without this, the
+     * engine happily handed us one, because a map that names no mode means "any mode".
+     */
+    @Override
+    public boolean requiresDedicatedMap() {
+        return true;
+    }
+
+    /**
      * One long round, and you may build: a fortress match is a thirty-minute survival game
      * on a destructible map, not a duel. {@code building = true} is what tells the engine to
      * put players in SURVIVAL and stop cancelling their blocks.

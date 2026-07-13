@@ -70,6 +70,21 @@ public interface GameModeDefinition {
     /** Does a win change the players' rating? */
     boolean ranked();
 
+    /**
+     * Refuse to be played on a general-purpose arena.
+     *
+     * A map that names no mode means "any mode" — a sensible default for a plain fighting
+     * island, and wrong the moment a mode turns up that <b>cannot</b> be played on one.
+     * Fortress needs two fortress pads, resources and a destructible floor; dropped onto a
+     * duel island it produces a match that starts and can never be won.
+     *
+     * Say true, and the engine will only ever put you on a map whose {@code map.yml} names
+     * you — and will tell the player, rather than queue them forever, if there is none.
+     */
+    default boolean requiresDedicatedMap() {
+        return false;
+    }
+
     MatchRules rules();
 
     /** A fresh handler for each match. */

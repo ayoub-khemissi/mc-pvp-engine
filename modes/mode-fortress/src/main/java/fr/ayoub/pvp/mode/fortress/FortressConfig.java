@@ -29,7 +29,7 @@ public final class FortressConfig {
     public static final int HOTBAR_BLOCKS = 8;
 
     private final BuildRules buildRules;
-    private final List<String> hotbar;
+    private final List<String> ordered;
 
     private final int slots;
     private final String buildWorld;
@@ -53,18 +53,19 @@ public final class FortressConfig {
                 config.getInt("fortress.crystal.clearance-radius", 1),
                 config.getInt("fortress.crystal.clearance-height", 3));
 
-        this.hotbar = bestBlocks(buildRules.allowance().keySet());
+        this.ordered = byStrength(buildRules.allowance().keySet());
     }
 
     /**
-     * The blocks that go straight into the builder's hotbar, best first.
+     * The whole palette, best first.
      *
      * "Best" is not my opinion: for a fortress, a good block is one that takes a long time
      * to break and survives an explosion. So they are ranked by <b>blast resistance, then
-     * hardness</b> — the game's own numbers. Change the palette and the hotbar re-sorts
-     * itself; nobody has to maintain a second list that silently drifts out of date.
+     * hardness</b> — the game's own numbers. Change the palette and the hotbar and the
+     * inventory re-sort themselves; nobody has to maintain a second list that silently
+     * drifts out of date.
      */
-    private static List<String> bestBlocks(Collection<String> palette) {
+    private static List<String> byStrength(Collection<String> palette) {
         return palette.stream()
                 .map(Material::matchMaterial)
                 .filter(Objects::nonNull)
@@ -72,14 +73,13 @@ public final class FortressConfig {
                         .comparingDouble(Material::getBlastResistance).reversed()
                         .thenComparing(Comparator.comparingDouble(Material::getHardness).reversed())
                         .thenComparing(Material::name))
-                .limit(HOTBAR_BLOCKS)
                 .map(Material::name)
                 .toList();
     }
 
-    /** Eight block ids, hardest first. The ninth hotbar slot is the End Crystal. */
-    public List<String> hotbarBlocks() {
-        return hotbar;
+    /** Every allowed block, hardest first. The first eight go in the hotbar. */
+    public List<String> paletteByStrength() {
+        return ordered;
     }
 
     private static Map<String, Integer> readPalette(FileConfiguration config, Logger logger) {
@@ -97,6 +97,15 @@ public final class FortressConfig {
                 logger.warning("Palette: '" + key + "' is not a block. Skipped.");
                 continue;
             }
+            // Some blocks have no item at all (REDSTONE_WIRE is placed with REDSTONE). If we
+            // cannot even hand it to a builder, it does not belong in the palette — and
+            // finding that out at boot beats finding it out when a menu dies mid-render.
+            if (PlacingItems.of(material) == null) {
+                logger.warning("Palette: '" + key + "' cannot be given to a player — "
+                        + "no item places it. Skipped. (Add it to PlacingItems if it should work.)");
+                continue;
+            }
+
             int quota = section.getInt(key);
             if (quota > 0) {
                 palette.put(material.name(), quota);
