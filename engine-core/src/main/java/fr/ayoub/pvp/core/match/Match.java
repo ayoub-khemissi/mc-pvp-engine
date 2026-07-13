@@ -3,6 +3,7 @@ package fr.ayoub.pvp.core.match;
 import fr.ayoub.pvp.api.GameModeDefinition;
 import fr.ayoub.pvp.api.MatchContext;
 import fr.ayoub.pvp.api.MatchHandler;
+import fr.ayoub.pvp.api.MatchOutcome;
 import fr.ayoub.pvp.api.Team;
 import fr.ayoub.pvp.core.arena.Arena;
 import fr.ayoub.pvp.domain.match.Format;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /** One running match. Also the {@link MatchContext} the game mode sees. */
 public final class Match implements MatchContext {
@@ -44,6 +46,13 @@ public final class Match implements MatchContext {
     private final Set<UUID> retired = new HashSet<>();
 
     private final Series series;
+    private final int[] kills;
+
+    /** Set by MatchService: how a mode ends its own match. */
+    private Consumer<MatchOutcome> finisher = outcome -> { };
+
+    /** When the clock runs out, in millis. 0 when the mode set no limit. */
+    private long deadline;
 
     public Match(GameModeDefinition mode, Format format, Arena arena, List<Team> teams) {
         this.mode = mode;
@@ -52,7 +61,27 @@ public final class Match implements MatchContext {
         this.teams = List.copyOf(teams);
         this.handler = mode.createHandler();
         this.series = new Series(mode.rules().rounds(), teams.size());
+        this.kills = new int[teams.size()];
         resetAlive();
+    }
+
+    public void onFinish(Consumer<MatchOutcome> action) {
+        this.finisher = action;
+    }
+
+    public void addKill(int team) {
+        kills[team]++;
+    }
+
+    public void startClock(long millis) {
+        this.deadline = System.currentTimeMillis() + millis;
+    }
+
+    /** Someone is coming back from the dead. Respawn modes need this; a duel never does. */
+    public void revive(UUID player) {
+        if (!retired.contains(player)) {
+            alive.add(player);
+        }
     }
 
     // --- engine side -----------------------------------------------------------
@@ -211,6 +240,24 @@ public final class Match implements MatchContext {
     @Override
     public String arenaId() {
         return arena.id();
+    }
+
+    @Override
+    public int kills(int team) {
+        return kills[team];
+    }
+
+    @Override
+    public int secondsLeft() {
+        if (deadline == 0) {
+            return -1;
+        }
+        return (int) Math.max(0, (deadline - System.currentTimeMillis()) / 1000);
+    }
+
+    @Override
+    public void finish(MatchOutcome outcome) {
+        finisher.accept(outcome);
     }
 
     @Override

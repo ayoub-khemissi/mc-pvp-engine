@@ -32,6 +32,7 @@ public final class FortressConfig {
     private final List<String> ordered;
 
     private final int slots;
+    private final int crystalHealth;
     private final String buildWorld;
     private final int zoneSize;
     private final int zoneSpacing;
@@ -41,6 +42,7 @@ public final class FortressConfig {
         int size = config.getInt("fortress.size", 20);
 
         this.slots = Math.max(1, config.getInt("fortress.slots", 3));
+        this.crystalHealth = Math.max(1, config.getInt("fortress.crystal.health", 250));
         this.buildWorld = config.getString("build.world", "fortress_build");
         this.zoneSize = Math.max(size + 4, config.getInt("build.size", 50));
         this.zoneSpacing = Math.max(zoneSize + 16, config.getInt("build.spacing", 128));
@@ -125,6 +127,17 @@ public final class FortressConfig {
 
     public int slots() {
         return slots;
+    }
+
+    /**
+     * How much the End Crystal takes before it breaks.
+     *
+     * The length of the endgame, in one number. Vanilla gives a crystal ONE hit point; at
+     * that value a fortress is a formality, and the first arrow across the map ends the
+     * match. Too high and nobody ever finishes one and every game goes to kills.
+     */
+    public int crystalHealth() {
+        return crystalHealth;
     }
 
     public String buildWorld() {

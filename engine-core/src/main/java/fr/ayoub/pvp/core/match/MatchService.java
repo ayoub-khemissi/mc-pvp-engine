@@ -14,8 +14,10 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -98,6 +100,12 @@ public final class MatchService {
         }
 
         Match match = new Match(mode, format, arena.get(), teams);
+
+        // How a mode ends its own match: a crystal broken, a payload delivered. Without this
+        // the engine's "last team standing" is the only way a match can end, and a mode with
+        // respawn would run forever.
+        match.onFinish(outcome -> finish(match, outcome));
+
         active.add(match);
 
         prepare(match);
@@ -246,6 +254,7 @@ public final class MatchService {
     private void begin(Match match) {
         match.state().transitionTo(MatchState.LIVE);
 
+        startClock(match);
         match.alivePlayers().forEach(Freeze::release);   // and only now can they move
 
         match.title(Component.text("FIGHT!", NamedTextColor.RED), Component.empty());
@@ -258,19 +267,128 @@ public final class MatchService {
 
     public void handleDeath(Player victim, Player killer) {
         matchOf(victim).ifPresent(match -> {
-            if (!match.isLive()) {
+            if (!match.isLive() || !match.isAlive(victim)) {
                 return;
             }
 
             match.eliminate(victim);
-            makeSpectator(victim, match);
+            countKill(match, victim, killer);
 
+            match.handler().onPlayerDeath(match, victim, killer);
+
+            if (match.mode().rules().hasRespawn()) {
+                respawn(match, victim, killer);
+                checkObjective(match);   // a mode may still have decided the match
+                return;
+            }
+
+            makeSpectator(victim, match);
             match.broadcast(Component.text(victim.getName(), NamedTextColor.RED)
                     .append(Component.text(" was eliminated", NamedTextColor.GRAY)));
 
-            match.handler().onPlayerDeath(match, victim, killer);
             checkRoundOver(match);
         });
+    }
+
+    /** A kill only counts for the other side. Falling off a cliff is nobody's kill. */
+    private static void countKill(Match match, Player victim, Player killer) {
+        if (killer == null || killer.equals(victim)) {
+            return;
+        }
+        match.teamOf(killer)
+                .filter(team -> !team.contains(victim.getUniqueId()))
+                .ifPresent(team -> match.addKill(team.index()));
+    }
+
+    /**
+     * The dead come back — and leave everything they had on the ground.
+     *
+     * Which is the whole economy of a mode like Fortress: the diamond armour you were
+     * wearing is now lying in the grass where you fell, and the person who killed you is
+     * walking towards it. Take that away and dying costs nothing.
+     */
+    private void respawn(Match match, Player victim, Player killer) {
+        int delay = match.mode().rules().respawnSeconds();
+        Location grave = victim.getLocation();
+
+        dropEverything(victim, grave);
+
+        victim.setGameMode(GameMode.SPECTATOR);
+        victim.teleport(grave);
+
+        match.broadcast(killer == null
+                ? Component.text(victim.getName() + " died", NamedTextColor.GRAY)
+                : Component.text(victim.getName(), NamedTextColor.RED)
+                        .append(Component.text(" was killed by ", NamedTextColor.GRAY))
+                        .append(Component.text(killer.getName(), NamedTextColor.WHITE)));
+
+        victim.sendMessage(Component.text("Respawning in " + delay + "s — your gear is where "
+                + "you fell.", NamedTextColor.YELLOW));
+
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!match.isLive() || !victim.isOnline() || match.hasRetired(victim.getUniqueId())) {
+                return;
+            }
+
+            match.teamOf(victim).ifPresent(team -> {
+                match.revive(victim.getUniqueId());
+
+                victim.setGameMode(GameMode.SURVIVAL);
+                victim.teleport(match.spawn(team.index()));
+                victim.setHealth(20);
+                victim.setFoodLevel(20);
+                victim.setFireTicks(0);
+                victim.setFallDistance(0);
+                victim.getInventory().clear();
+                victim.getInventory().setArmorContents(null);
+
+                match.handler().onRespawn(match, victim, team.index());
+            });
+        }, delay * 20L);
+    }
+
+    private static void dropEverything(Player player, Location at) {
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (item != null && !item.getType().isAir()) {
+                at.getWorld().dropItemNaturally(at, item);
+            }
+        }
+        for (ItemStack armour : player.getInventory().getArmorContents()) {
+            if (armour != null && !armour.getType().isAir()) {
+                at.getWorld().dropItemNaturally(at, armour);
+            }
+        }
+        player.getInventory().clear();
+        player.getInventory().setArmorContents(null);
+    }
+
+    /**
+     * The clock.
+     *
+     * A mode with respawn has no "last team standing" to end on — everybody is always coming
+     * back. Its match ends on its own objective, or it ends on this. A match with neither
+     * would run until the server was restarted.
+     */
+    private void startClock(Match match) {
+        int limit = match.mode().rules().timeLimitSeconds();
+        if (limit <= 0) {
+            return;
+        }
+        match.startClock(limit * 1000L);
+
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (match.isLive()) {
+                finish(match, match.handler().onTimeUp(match));
+            }
+        }, limit * 20L);
+    }
+
+    /** A mode may have decided the match without anybody being wiped out. */
+    private void checkObjective(Match match) {
+        MatchOutcome outcome = match.handler().checkWinCondition(match);
+        if (outcome != null) {
+            finish(match, outcome);
+        }
     }
 
     public void handleQuit(Player player) {
@@ -306,6 +424,13 @@ public final class MatchService {
         MatchOutcome outcome = match.handler().checkWinCondition(match);
         if (outcome != null) {
             finish(match, outcome);
+            return;
+        }
+
+        // With respawn there is no such thing as a team wiped out — they are all coming back
+        // in five seconds. Ending the round because a team is briefly dead would end a
+        // thirty-minute match on the first exchange.
+        if (match.mode().rules().hasRespawn()) {
             return;
         }
 
@@ -403,6 +528,9 @@ public final class MatchService {
                                 : Component.text("DEFEAT", NamedTextColor.RED),
                         Component.text(score, NamedTextColor.GRAY)));
             }
+        } else if (outcome.isDraw()) {
+            match.title(Component.text("DRAW", NamedTextColor.YELLOW),
+                    Component.text("Neither team could finish it", NamedTextColor.GRAY));
         } else {
             match.title(Component.text("Match aborted", NamedTextColor.GRAY), Component.empty());
         }

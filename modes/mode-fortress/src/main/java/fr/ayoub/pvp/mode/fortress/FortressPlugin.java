@@ -5,6 +5,8 @@ import fr.ayoub.pvp.mode.fortress.build.BuildListener;
 import fr.ayoub.pvp.mode.fortress.build.BuildZoneService;
 import fr.ayoub.pvp.mode.fortress.build.VoidGenerator;
 import fr.ayoub.pvp.mode.fortress.map.FortressMapBuilder;
+import fr.ayoub.pvp.mode.fortress.match.CrystalListener;
+import fr.ayoub.pvp.mode.fortress.match.CrystalRegistry;
 import fr.ayoub.pvp.mode.fortress.storage.FortressLibrary;
 import fr.ayoub.pvp.mode.fortress.storage.FortressRepository;
 import org.bukkit.Bukkit;
@@ -66,7 +68,13 @@ public final class FortressPlugin extends JavaPlugin {
             buildMapIfMissing(arenas, config);
         }
 
-        PvPEngineApi.modes().register(new FortressMode(config, zones, fortresses, library));
+        // One listener for the whole server; one handler per match. The registry is the join
+        // between them: given the crystal that was hit, whose match is it?
+        CrystalRegistry crystals = new CrystalRegistry();
+        getServer().getPluginManager().registerEvents(new CrystalListener(crystals), this);
+
+        PvPEngineApi.modes().register(
+                new FortressMode(config, zones, fortresses, library, crystals));
 
         getLogger().info("Fortress ready — " + config.fortressSize() + "³ fortresses, "
                 + config.buildRules().allowance().size() + " block types, "

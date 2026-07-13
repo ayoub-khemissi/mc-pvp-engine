@@ -6,6 +6,7 @@ import fr.ayoub.pvp.api.MatchHandler;
 import fr.ayoub.pvp.api.MatchRules;
 import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.mode.fortress.build.BuildZoneService;
+import fr.ayoub.pvp.mode.fortress.match.CrystalRegistry;
 import fr.ayoub.pvp.mode.fortress.match.FortressHandler;
 import fr.ayoub.pvp.mode.fortress.menu.FortressMenu;
 import fr.ayoub.pvp.mode.fortress.storage.FortressLibrary;
@@ -33,13 +34,16 @@ public final class FortressMode implements GameModeDefinition {
     private final BuildZoneService zones;
     private final FortressRepository fortresses;
     private final FortressLibrary library;
+    private final CrystalRegistry crystals;
 
     public FortressMode(FortressConfig config, BuildZoneService zones,
-                        FortressRepository fortresses, FortressLibrary library) {
+                        FortressRepository fortresses, FortressLibrary library,
+                        CrystalRegistry crystals) {
         this.config = config;
         this.zones = zones;
         this.fortresses = fortresses;
         this.library = library;
+        this.crystals = crystals;
     }
 
     @Override
@@ -101,7 +105,7 @@ public final class FortressMode implements GameModeDefinition {
      */
     @Override
     public MatchRules rules() {
-        return new MatchRules(1, 5, 30 * 60, true);
+        return new MatchRules(1, 5, 30 * 60, true, 5);
     }
 
     /** Fortress brings its own screen: it queues, and it sends you to the build zone. */
@@ -112,6 +116,6 @@ public final class FortressMode implements GameModeDefinition {
 
     @Override
     public MatchHandler createHandler() {
-        return new FortressHandler(zones.plugin(), library);
+        return new FortressHandler(zones.plugin(), config, library, crystals);
     }
 }

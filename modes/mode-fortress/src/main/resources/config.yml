@@ -15,6 +15,10 @@ fortress:
     clearance-radius: 1     # 1 -> a 3x3 footprint, 2 -> 5x5
     clearance-height: 3     # blocks of headroom above the base
 
+    # How much punishment the crystal takes before it breaks. This is the length of the
+    # endgame: too low and a fortress is a formality, too high and nobody ever finishes one.
+    health: 250
+
 # The match map: an island you can dig, with a fortress pad at each end.
 #
 # Built once, on first start, IF there is no fortress map yet. A designer's map drops into

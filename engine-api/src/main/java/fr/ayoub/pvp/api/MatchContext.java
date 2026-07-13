@@ -70,4 +70,21 @@ public interface MatchContext {
     void broadcast(Component message);
 
     void title(Component title, Component subtitle);
+
+    /** How many kills a team has. The engine counts them; a mode decides what they are worth. */
+    int kills(int team);
+
+    /** Seconds left on the clock, or -1 when the mode set no time limit. */
+    int secondsLeft();
+
+    /**
+     * End the match, now.
+     *
+     * A mode with a win condition of its own — a crystal broken, a payload delivered — has to
+     * be able to say so. Without this, the engine's "last team standing" is the only way a
+     * match can end, and a mode with respawn would run forever.
+     *
+     * Safe to call twice: the second call does nothing.
+     */
+    void finish(MatchOutcome outcome);
 }

@@ -45,8 +45,16 @@ public final class RatingService {
         return ladder;
     }
 
+    /**
+     * Move the ladder.
+     *
+     * A <b>draw is rated</b> — both sides score 0.5. An <b>abort is not</b>. Thirty minutes
+     * of Fortress that ends level on kills is a result and belongs on the ladder; a server
+     * restart is not, and rating it would hand people a rating change for a match nobody
+     * finished. Collapsing the two was the old behaviour, and it quietly threw the draw away.
+     */
     public void applyResult(Match match, MatchOutcome outcome) {
-        if (!match.mode().ranked() || !outcome.hasWinner()) {
+        if (!match.mode().ranked() || !outcome.isRated()) {
             return;
         }
 
@@ -78,7 +86,9 @@ public final class RatingService {
             // 3. New rating for each player, then persist.
             Map<UUID, RatingChange> changes = new HashMap<>();
             for (Team team : teams) {
-                Outcome result = team.index() == outcome.winningTeam() ? Outcome.WIN : Outcome.LOSS;
+                Outcome result = outcome.isDraw()
+                        ? Outcome.DRAW
+                        : team.index() == outcome.winningTeam() ? Outcome.WIN : Outcome.LOSS;
                 int own = teamAverage.get(team.index());
                 int opponents = averageOfOthers(teamAverage, team.index());
 

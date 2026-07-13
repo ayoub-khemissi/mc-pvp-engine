@@ -59,6 +59,23 @@ public interface MatchHandler {
         return null;
     }
 
+    /**
+     * The clock ran out. Who won?
+     *
+     * The default is a draw, which is the honest answer when a mode has not said otherwise.
+     * Fortress counts kills and hands it to whoever has more — and still returns a draw when
+     * they are level, because thirty minutes of a real fight that ended dead even is a
+     * result, not a failure.
+     */
+    default MatchOutcome onTimeUp(MatchContext context) {
+        return MatchOutcome.draw();
+    }
+
+    /** A player is about to come back. Give them their kit again, if your mode has one. */
+    default void onRespawn(MatchContext context, Player player, int team) {
+        giveKit(context, player, team);
+    }
+
     default void onEnd(MatchContext context, MatchOutcome outcome) {
     }
 }
