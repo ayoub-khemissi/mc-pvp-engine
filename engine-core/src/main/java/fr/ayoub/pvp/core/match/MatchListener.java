@@ -1,5 +1,6 @@
 package fr.ayoub.pvp.core.match;
 
+import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
@@ -66,9 +67,18 @@ public final class MatchListener implements Listener {
      */
     @EventHandler(ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
-        matches.matchOf(event.getPlayer()).ifPresent(match -> {
-            if (match.isLive() || !match.isAlive(event.getPlayer())) {
-                return;   // never freeze someone who is watching from spectator mode
+        Player player = event.getPlayer();
+
+        // Never hold a spectator still. They are either dead and watching, or they are being
+        // flown somewhere by their mode — Fortress walks its teams through three fortresses
+        // before the match — and neither is a player who must not move.
+        if (player.getGameMode() == GameMode.SPECTATOR) {
+            return;
+        }
+
+        matches.matchOf(player).ifPresent(match -> {
+            if (match.isLive() || !match.isAlive(player)) {
+                return;
             }
             if (changedBlock(event)) {
                 event.setCancelled(true);

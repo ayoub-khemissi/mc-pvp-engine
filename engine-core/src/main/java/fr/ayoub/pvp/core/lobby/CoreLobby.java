@@ -50,4 +50,13 @@ public final class CoreLobby implements EngineLobby {
                 .map(Party::members)
                 .orElse(List.of());
     }
+
+    /** Blocking JDBC. The SPI says so; a mode that calls this on the main thread will feel it. */
+    @Override
+    public int ratingOf(UUID player, GameModeDefinition mode, Format format) {
+        return plugin.ratings()
+                .find(player, mode.id(), format.id())
+                .map(row -> row.rating())
+                .orElse(PvPEnginePlugin.STARTING_RATING);
+    }
 }

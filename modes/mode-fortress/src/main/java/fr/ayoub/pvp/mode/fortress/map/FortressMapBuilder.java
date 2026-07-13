@@ -39,13 +39,28 @@ public final class FortressMapBuilder {
 
     // --- the shape of an instance ---------------------------------------------------
 
+    /**
+     * The map's shape has changed. Bump this when it does, and old map files are rebuilt.
+     *
+     * Version 2 added the voting plains, and had to raise the ceiling to hold them. A server
+     * that already had version 1 maps would otherwise keep them, and its players would be
+     * teleported to a voting plain that was never built.
+     */
+    public static final int MAP_VERSION = 2;
+
     public static final int SIZE = 128;          // the island, in blocks
     public static final int SPACING = 256;       // between two instances
     public static final int BEDROCK_Y = 40;
     public static final int SURFACE_Y = 62;      // the last solid block: you stand on 63
+    public static final int CEILING_Y = 200;
 
     /** The pads sit near the two ends, facing each other along Z. */
     private static final int PAD_MARGIN = 18;
+
+    /** The voting plains float above the island, one per team, out of sight of each other. */
+    public static final int VOTE_Y = 130;
+    private static final int VOTE_GAP = 6;       // between two fortresses on display
+    private static final int VOTE_APRON = 10;    // where the voters stand, in front of them
 
     private final Plugin plugin;
     private final FortressConfig config;
@@ -79,9 +94,88 @@ public final class FortressMapBuilder {
         blocks += trees(world, ox, oz, random);
         blocks += cave(world, ox, oz);
         blocks += house(world, ox, oz);
+        blocks += votingPlains(world, ox, oz);
         blocks += walls(world, ox, oz);
 
         return blocks;
+    }
+
+    // --- the voting plains ------------------------------------------------------------
+
+    /**
+     * Where a team stands and picks the fortress it is going to fight behind.
+     *
+     * One per team, far apart and high above the island — you look at your own three, not at
+     * the enemy's. The candidates are pasted onto it when the match starts and taken down
+     * again when the vote ends; all that is built here is the floor they stand on and the
+     * numbers in front of them.
+     */
+    private int votingPlains(World world, int ox, int oz) {
+        int cube = config.fortressSize();
+        int width = 3 * cube + 2 * VOTE_GAP;
+        int depth = cube + VOTE_APRON;
+        int blocks = 0;
+
+        for (int team = 0; team < 2; team++) {
+            int px = votePlainX(ox);
+            int pz = votePlainZ(oz, team);
+
+            for (int x = 0; x < width; x++) {
+                for (int z = 0; z < depth; z++) {
+                    world.getBlockAt(px + x, VOTE_Y, pz + z)
+                            .setType(Material.SMOOTH_STONE, false);
+                    blocks++;
+                }
+            }
+
+            // 1, 2, 3 — on the floor, in front of each fortress, so the number on the ground
+            // is the number in your hand. Nobody should have to work out which is which.
+            for (int slot = 0; slot < 3; slot++) {
+                int sx = px + slot * (cube + VOTE_GAP) + cube / 2;
+                int sz = pz + depth - 3;
+
+                world.getBlockAt(sx, VOTE_Y, sz).setType(Material.GOLD_BLOCK, false);
+                Block sign = world.getBlockAt(sx, VOTE_Y + 1, sz);
+                sign.setType(Material.OAK_SIGN, false);
+
+                if (sign.getState() instanceof org.bukkit.block.Sign text) {
+                    text.getSide(org.bukkit.block.sign.Side.FRONT)
+                            .line(1, net.kyori.adventure.text.Component.text("[ " + (slot + 1) + " ]",
+                                    net.kyori.adventure.text.format.NamedTextColor.GOLD));
+                    text.setWaxed(true);
+                    text.update();
+                }
+                blocks += 2;
+            }
+        }
+        return blocks;
+    }
+
+    /** The corner of a voting plain: fortress 1 is pasted here, 2 and 3 to its right. */
+    public static int votePlainX(int ox) {
+        return ox + 8;
+    }
+
+    public static int votePlainZ(int oz, int team) {
+        return team == 0 ? oz + 4 : oz + 70;
+    }
+
+    /** Where fortress {@code slot} (0-based) is shown. */
+    public static int voteSlotX(int ox, int cube, int slot) {
+        return votePlainX(ox) + slot * (cube + VOTE_GAP);
+    }
+
+    /** Where the team stands: in front of their three, looking at them. */
+    public static Location voteSpawn(World world, int index, int cube, int team) {
+        int ox = index * SPACING;
+        int oz = 0;
+
+        double x = votePlainX(ox) + (3 * cube + 2 * VOTE_GAP) / 2.0;
+        double z = votePlainZ(oz, team) + cube + VOTE_APRON - 1.5;
+
+        Location at = new Location(world, x, VOTE_Y + 1, z);
+        at.setYaw(180f);   // looking back down the plain, at the fortresses
+        return at;
     }
 
     // --- the ground -----------------------------------------------------------------
@@ -407,6 +501,7 @@ public final class FortressMapBuilder {
         yaml.set("id", id);
         yaml.set("world", world.getName());
         yaml.set("modes", List.of("fortress"));
+        yaml.set("fortress-map-version", MAP_VERSION);
 
         for (int team = 0; team < 2; team++) {
             int px = padX(ox, cube);
@@ -433,7 +528,9 @@ public final class FortressMapBuilder {
         yaml.set("bounds.min-y", (double) BEDROCK_Y);
         yaml.set("bounds.min-z", (double) oz - 1);
         yaml.set("bounds.max-x", (double) ox + SIZE);
-        yaml.set("bounds.max-y", (double) SURFACE_Y + 40);
+        // High enough to hold the voting plains. The engine pushes players back inside the
+        // bounds, so a ceiling below them would drag a voter out of the vote.
+        yaml.set("bounds.max-y", (double) CEILING_Y);
         yaml.set("bounds.max-z", (double) oz + SIZE);
 
         File maps = new File(plugin.getDataFolder().getParentFile(), "PvPEngine/maps");

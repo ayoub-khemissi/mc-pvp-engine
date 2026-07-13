@@ -72,6 +72,19 @@ public interface MatchContext {
     void title(Component title, Component subtitle);
 
     /**
+     * Let a player move, or stop them, during the mode's own setup.
+     *
+     * The engine freezes everybody as soon as they land in the arena, so nobody wanders off
+     * before FIGHT. A mode that runs something <b>before</b> the countdown needs that back:
+     * Fortress flies its teams around three fortresses so they can look inside the one they
+     * are about to bet a match on, and a frozen player cannot fly.
+     *
+     * The engine freezes them all again at the start of the countdown regardless, so a mode
+     * that forgets to re-freeze cannot break anything.
+     */
+    void freeze(Player player, boolean frozen);
+
+    /**
      * "I am about to change this block. Remember what it was."
      *
      * The engine already watches everything a <b>player</b> does to a destructible arena, and

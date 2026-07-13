@@ -7,6 +7,7 @@ import fr.ayoub.pvp.api.MatchRules;
 import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.mode.fortress.build.BuildZoneService;
 import fr.ayoub.pvp.mode.fortress.match.CrystalRegistry;
+import fr.ayoub.pvp.mode.fortress.match.VoteRegistry;
 import fr.ayoub.pvp.mode.fortress.match.FortressHandler;
 import fr.ayoub.pvp.mode.fortress.menu.FortressMenu;
 import fr.ayoub.pvp.mode.fortress.storage.FortressLibrary;
@@ -35,15 +36,17 @@ public final class FortressMode implements GameModeDefinition {
     private final FortressRepository fortresses;
     private final FortressLibrary library;
     private final CrystalRegistry crystals;
+    private final VoteRegistry votes;
 
     public FortressMode(FortressConfig config, BuildZoneService zones,
                         FortressRepository fortresses, FortressLibrary library,
-                        CrystalRegistry crystals) {
+                        CrystalRegistry crystals, VoteRegistry votes) {
         this.config = config;
         this.zones = zones;
         this.fortresses = fortresses;
         this.library = library;
         this.crystals = crystals;
+        this.votes = votes;
     }
 
     @Override
@@ -116,6 +119,6 @@ public final class FortressMode implements GameModeDefinition {
 
     @Override
     public MatchHandler createHandler() {
-        return new FortressHandler(zones.plugin(), config, library, crystals);
+        return new FortressHandler(zones.plugin(), config, library, crystals, votes);
     }
 }

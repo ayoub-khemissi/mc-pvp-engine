@@ -7,6 +7,7 @@ import fr.ayoub.pvp.mode.fortress.build.VoidGenerator;
 import fr.ayoub.pvp.mode.fortress.map.FortressMapBuilder;
 import fr.ayoub.pvp.mode.fortress.match.CrystalListener;
 import fr.ayoub.pvp.mode.fortress.match.CrystalRegistry;
+import fr.ayoub.pvp.mode.fortress.match.VoteRegistry;
 import fr.ayoub.pvp.mode.fortress.storage.FortressLibrary;
 import fr.ayoub.pvp.mode.fortress.storage.FortressRepository;
 import org.bukkit.Bukkit;
@@ -14,6 +15,7 @@ import org.bukkit.Difficulty;
 import org.bukkit.GameRule;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -73,8 +75,11 @@ public final class FortressPlugin extends JavaPlugin {
         CrystalRegistry crystals = new CrystalRegistry();
         getServer().getPluginManager().registerEvents(new CrystalListener(crystals), this);
 
+        VoteRegistry votes = new VoteRegistry();
+        getServer().getPluginManager().registerEvents(votes, this);
+
         PvPEngineApi.modes().register(
-                new FortressMode(config, zones, fortresses, library, crystals));
+                new FortressMode(config, zones, fortresses, library, crystals, votes));
 
         getLogger().info("Fortress ready — " + config.fortressSize() + "³ fortresses, "
                 + config.buildRules().allowance().size() + " block types, "
@@ -121,10 +126,19 @@ public final class FortressPlugin extends JavaPlugin {
      */
     private void buildMapIfMissing(World world, FortressConfig config) {
         File maps = new File(getDataFolder().getParentFile(), "PvPEngine/maps");
-        File[] existing = maps.listFiles((dir, name) -> name.startsWith("fortress-"));
+        File[] existing = maps.listFiles((dir, name) -> name.matches("fortress-\\d+\\.yml"));
 
         if (existing != null && existing.length > 0) {
-            return;
+            if (upToDate(existing)) {
+                return;
+            }
+            // The map's SHAPE changed — version 2 added the voting plains and had to raise
+            // the ceiling to hold them. Keeping the old files would teleport players to a
+            // plain that was never built. Rebuild, and say so.
+            getLogger().warning("The fortress map is out of date (the shape changed). Rebuilding it.");
+            for (File file : existing) {
+                file.delete();
+            }
         }
 
         int instances = Math.max(1, getConfig().getInt("map.instances", 2));
@@ -134,6 +148,33 @@ public final class FortressPlugin extends JavaPlugin {
 
         getLogger().info("Fortress map built: " + blocks + " blocks, " + instances
                 + " instance(s). Restart or /pvpadmin reload to load them.");
+    }
+
+    /**
+     * Is every map <b>we generated</b> from the current shape?
+     *
+     * The rule is: we only ever rebuild our own. A map a designer hands over must never be
+     * touched, whatever we change here.
+     *
+     * "Ours" means the file is called {@code fortress-<number>.yml} — which is exactly and
+     * only what the generator writes. Version 1 shipped without a version key, so a file of
+     * ours with no version is version 1, and out of date. A designer's map is simply not
+     * called that, and never matches.
+     */
+    private boolean upToDate(File[] maps) {
+        for (File file : maps) {
+            if (!file.getName().matches("fortress-\\d+\\.yml")) {
+                continue;   // not ours. Not ours to rebuild.
+            }
+
+            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+            int version = yaml.getInt("fortress-map-version", 1);
+
+            if (version < FortressMapBuilder.MAP_VERSION) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override

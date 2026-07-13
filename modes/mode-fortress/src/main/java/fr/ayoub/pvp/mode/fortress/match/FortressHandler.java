@@ -8,6 +8,7 @@ import fr.ayoub.pvp.api.Team;
 import fr.ayoub.pvp.domain.fortress.BlockIds;
 import fr.ayoub.pvp.domain.fortress.BlockPos;
 import fr.ayoub.pvp.domain.fortress.Blueprint;
+import fr.ayoub.pvp.domain.fortress.Candidate;
 import fr.ayoub.pvp.domain.fortress.CubeRotation;
 import fr.ayoub.pvp.mode.fortress.FortressConfig;
 import fr.ayoub.pvp.mode.fortress.map.FortressMapBuilder;
@@ -16,6 +17,7 @@ import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -31,6 +33,7 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,19 +56,23 @@ public final class FortressHandler implements MatchHandler {
     private final FortressConfig config;
     private final FortressLibrary library;
     private final CrystalRegistry registry;
+    private final VoteRegistry votes;
 
     private final Map<Integer, Crystal> crystals = new HashMap<>();
     private final Map<Integer, BossBar> bars = new HashMap<>();
 
     private MatchContext context;
     private BukkitTask hud;
+    private VotePhase vote;
 
     public FortressHandler(Plugin plugin, FortressConfig config,
-                           FortressLibrary library, CrystalRegistry registry) {
+                           FortressLibrary library, CrystalRegistry registry,
+                           VoteRegistry votes) {
         this.plugin = plugin;
         this.config = config;
         this.library = library;
         this.registry = registry;
+        this.votes = votes;
     }
 
     @Override
@@ -86,55 +93,123 @@ public final class FortressHandler implements MatchHandler {
         this.context = context;
         List<Team> teams = context.teams();
 
-        // Off the main thread: this reads and decodes two fortresses.
+        // Off the main thread: this reads ratings and decodes up to six fortresses.
         PvPEngineApi.storage().async().execute(() -> {
-            Map<Integer, Blueprint> chosen = new HashMap<>();
+            Map<Integer, List<Candidate>> candidates = new HashMap<>();
+            Map<Integer, List<Blueprint>> previews = new HashMap<>();
+            Map<UUID, Blueprint> byFortress = new HashMap<>();
+
             for (Team team : teams) {
-                pick(team).ifPresent(blueprint -> chosen.put(team.index(), blueprint));
+                gather(context, team, candidates, previews, byFortress);
             }
 
             Bukkit.getScheduler().runTask(plugin, () -> {
-                for (Team team : teams) {
-                    Blueprint blueprint = chosen.get(team.index());
-
-                    if (blueprint == null) {
-                        // Nobody in the team has a fortress today's rules accept. Say so —
-                        // an empty pad with no explanation reads as a broken server.
-                        context.broadcast(Component.text("Team " + (team.index() + 1)
-                                + " has no fortress: its pad is empty.", NamedTextColor.RED));
-                        continue;
-                    }
-                    paste(context, team.index(), blueprint);
-                }
-
                 resetMobs(context);
-                showBars(context);
-                ready.run();
+
+                vote = new VotePhase(plugin, config, context, votes,
+                        (team, chosen) -> stand(context, team, byFortress.get(chosen.fortressId())));
+
+                vote.start(candidates, previews, () -> {
+                    bringEveryoneDown(context);
+                    showBars(context);
+                    ready.run();
+                });
             });
         });
     }
 
     /**
-     * Which fortress the team plays.
+     * What a team gets to choose from: <b>one fortress per member — their default</b>.
      *
-     * The vote comes next. For now: the first member's default, and failing that the first
-     * playable fortress anybody in the team owns. Every path goes through the library, so
-     * nothing today's rules reject can reach a pad — whatever the choosing rule becomes.
+     * Ordered by rating, best first, and that is not decoration. A tied vote — one-all in a
+     * 2v2, which is not an edge case but the normal case — goes to candidate 1, and candidate
+     * 1 is the best-rated player's fortress. Without the ordering the tie-break is a coin
+     * toss.
+     *
+     * A team where nobody has anything playable gets nothing, and is told so: an empty pad
+     * with no explanation reads as a broken server.
      */
-    private Optional<Blueprint> pick(Team team) {
-        for (UUID member : team.members()) {
-            Optional<Blueprint> preferred = library.defaultForMatch(member);
-            if (preferred.isPresent()) {
-                return preferred;
-            }
+    private void gather(MatchContext context, Team team,
+                        Map<Integer, List<Candidate>> candidates,
+                        Map<Integer, List<Blueprint>> previews,
+                        Map<UUID, Blueprint> byFortress) {
+
+        record Entry(int rating, Candidate candidate, Blueprint blueprint) {
         }
+
+        List<Entry> entries = new ArrayList<>();
+
         for (UUID member : team.members()) {
             List<FortressLibrary.Checked> playable = library.playableFor(member);
-            if (!playable.isEmpty()) {
-                return library.forMatch(member, playable.getFirst().slot());
+            if (playable.isEmpty()) {
+                continue;
+            }
+
+            // Their default if it is playable, otherwise the first one that is.
+            FortressLibrary.Checked pick = playable.stream()
+                    .filter(checked -> checked.fortress().isDefault())
+                    .findFirst()
+                    .orElse(playable.getFirst());
+
+            library.forMatch(member, pick.slot()).ifPresent(blueprint -> {
+                UUID id = UUID.randomUUID();   // this candidacy, not the row
+                byFortress.put(id, blueprint);
+
+                int rating = PvPEngineApi.lobby()
+                        .ratingOf(member, context.mode(), context.format());
+
+                entries.add(new Entry(rating, new Candidate(member, id, pick.name()), blueprint));
+            });
+        }
+
+        if (entries.isEmpty()) {
+            return;
+        }
+
+        entries.sort(Comparator.comparingInt(Entry::rating).reversed());
+
+        candidates.put(team.index(), entries.stream().map(Entry::candidate).toList());
+        previews.put(team.index(), entries.stream().map(Entry::blueprint).toList());
+    }
+
+    /** The vote is in. Stand this team's fortress on its pad. */
+    private void stand(MatchContext context, int team, Blueprint blueprint) {
+        if (blueprint == null) {
+            context.broadcast(Component.text("Team " + (team + 1)
+                    + " has no fortress: its pad is empty.", NamedTextColor.RED));
+            return;
+        }
+        paste(context, team, blueprint);
+    }
+
+    /**
+     * Undo the vote.
+     *
+     * The engine set everybody up on their spawn — kitted, frozen, in survival — and then we
+     * took them a hundred blocks into the air and made them spectators. It is not going to do
+     * that again: it hands the match to the countdown the moment we say we are ready. So
+     * putting them back is ours to do, and forgetting it means a match that starts with two
+     * ghosts floating over an island.
+     */
+    private void bringEveryoneDown(MatchContext context) {
+        for (Team team : context.teams()) {
+            for (Player player : context.onlinePlayers()) {
+                if (!team.contains(player.getUniqueId())) {
+                    continue;
+                }
+
+                player.setGameMode(GameMode.SURVIVAL);
+                player.teleport(context.spawn(team.index()));
+                player.getInventory().clear();
+                player.getInventory().setArmorContents(null);
+                player.setHealth(20);
+                player.setFoodLevel(20);
+                player.setFallDistance(0);
+
+                giveKit(context, player, team.index());
+                context.freeze(player, true);   // still nobody moves until FIGHT
             }
         }
-        return Optional.empty();
     }
 
     /**
@@ -154,58 +229,17 @@ public final class FortressHandler implements MatchHandler {
             return;
         }
 
-        CubeRotation rotation = team == 0 ? CubeRotation.NONE : CubeRotation.HALF_TURN;
-        StructureRotation blocks = team == 0
-                ? StructureRotation.NONE
-                : StructureRotation.CLOCKWISE_180;
+        // Team 1 is turned half way round: the pads face each other, and a blueprint's front
+        // is its z = 0 face. Unrotated, the second team would defend a fortress whose gate
+        // opens away from the enemy and whose blind wall takes the assault.
+        boolean turned = team == 1;
 
-        int size = blueprint.size();
-
-        for (int y = 0; y < size; y++) {
-            for (int z = 0; z < size; z++) {
-                for (int x = 0; x < size; x++) {
-                    BlockPos from = new BlockPos(x, y, z);
-                    if (blueprint.isAir(from)) {
-                        continue;
-                    }
-                    BlockPos to = rotation.apply(from, size);
-
-                    Block block = context.world().getBlockAt(
-                            pad.getBlockX() + to.x(),
-                            pad.getBlockY() + to.y(),
-                            pad.getBlockZ() + to.z());
-
-                    // The engine watches what PLAYERS do to the map and puts it back. It
-                    // cannot see this: we are writing blocks directly, no event fires, and a
-                    // fortress nobody journalled would still be standing when the next match
-                    // began. One line, and it comes down with everything else.
-                    context.rememberBlock(block.getLocation());
-
-                    place(block, blueprint.get(from), blocks);
-                }
-            }
-        }
+        Fortresses.paste(context, blueprint,
+                pad.getBlockX(), pad.getBlockY(), pad.getBlockZ(), turned);
 
         if (blueprint.crystal() != null) {
-            BlockPos at = rotation.apply(blueprint.crystal(), size);
-            spawnCrystal(context, team, pad, at);
-        }
-    }
-
-    private void place(Block block, String state, StructureRotation rotation) {
-        try {
-            var data = Bukkit.createBlockData(state);
-            data.rotate(rotation);
-            block.setBlockData(data, false);
-            return;
-        } catch (IllegalArgumentException e) {
-            // The saved state did not survive a version change. A stair facing the wrong way
-            // is a nuisance; a hole in a fortress is a lost match.
-        }
-
-        Material material = Material.matchMaterial(BlockIds.typeOf(state));
-        if (material != null && material.isBlock()) {
-            block.setType(material, false);
+            CubeRotation rotation = turned ? CubeRotation.HALF_TURN : CubeRotation.NONE;
+            spawnCrystal(context, team, pad, rotation.apply(blueprint.crystal(), blueprint.size()));
         }
     }
 

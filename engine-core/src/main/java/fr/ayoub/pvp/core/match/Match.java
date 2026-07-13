@@ -251,6 +251,15 @@ public final class Match implements MatchContext {
     }
 
     @Override
+    public void freeze(Player player, boolean frozen) {
+        if (frozen) {
+            Freeze.apply(player);
+        } else {
+            Freeze.release(player);
+        }
+    }
+
+    @Override
     public void rememberBlock(Location location) {
         journal.remember(location.getBlock());
     }

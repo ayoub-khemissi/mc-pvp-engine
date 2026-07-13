@@ -33,6 +33,7 @@ public final class FortressConfig {
 
     private final int slots;
     private final int crystalHealth;
+    private final int voteSeconds;
     private final String buildWorld;
     private final int zoneSize;
     private final int zoneSpacing;
@@ -43,6 +44,7 @@ public final class FortressConfig {
 
         this.slots = Math.max(1, config.getInt("fortress.slots", 3));
         this.crystalHealth = Math.max(1, config.getInt("fortress.crystal.health", 250));
+        this.voteSeconds = Math.max(5, config.getInt("fortress.vote-seconds", 30));
         this.buildWorld = config.getString("build.world", "fortress_build");
         this.zoneSize = Math.max(size + 4, config.getInt("build.size", 50));
         this.zoneSpacing = Math.max(zoneSize + 16, config.getInt("build.spacing", 128));
@@ -127,6 +129,11 @@ public final class FortressConfig {
 
     public int slots() {
         return slots;
+    }
+
+    /** How long a team has to look round three fortresses and agree on one. */
+    public int voteSeconds() {
+        return voteSeconds;
     }
 
     /**

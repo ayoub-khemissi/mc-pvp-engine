@@ -3,6 +3,7 @@ package fr.ayoub.pvp.domain.fortress;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.UUID;
 
 /**
@@ -51,6 +52,12 @@ public final class TeamVote {
 
     public boolean hasVoted(UUID player) {
         return ballots.containsKey(player);
+    }
+
+    /** What they chose, 1-based. Empty if they have not. */
+    public OptionalInt voteOf(UUID player) {
+        Integer number = ballots.get(player);
+        return number == null ? OptionalInt.empty() : OptionalInt.of(number);
     }
 
     public int votesCast() {

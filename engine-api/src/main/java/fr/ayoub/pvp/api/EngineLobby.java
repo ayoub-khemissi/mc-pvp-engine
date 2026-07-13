@@ -37,4 +37,13 @@ public interface EngineLobby {
      * rating, refusing a format the group is too big for.
      */
     List<UUID> partyMembers(Player player);
+
+    /**
+     * A player's rating in one of your formats.
+     *
+     * Reads the database — <b>call it off the main thread</b>. A mode needs it to sort people:
+     * Fortress lines three fortresses up best-rated first, and that order is what settles a
+     * tied vote. Without it the tie-break would be a coin toss.
+     */
+    int ratingOf(UUID player, GameModeDefinition mode, Format format);
 }
