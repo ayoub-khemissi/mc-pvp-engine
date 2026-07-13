@@ -71,9 +71,20 @@ public final class FortressMapBuilder {
     }
 
     public int build(World world, int instances) {
+        return build(world, 0, instances);
+    }
+
+    /**
+     * Build instances {@code [from, to)}, and leave the others alone.
+     *
+     * The range matters: raising {@code map.instances} must add islands without touching the
+     * ones that are already there. Rebuilding an island somebody is fighting on would drop a
+     * fresh layer of stone through their fortress in the middle of their match.
+     */
+    public int build(World world, int from, int to) {
         int blocks = 0;
 
-        for (int index = 0; index < instances; index++) {
+        for (int index = from; index < to; index++) {
             blocks += buildInstance(world, index);
             writeMapFile(world, index);
         }

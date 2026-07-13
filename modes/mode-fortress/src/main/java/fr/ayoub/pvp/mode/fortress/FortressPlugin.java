@@ -128,26 +128,37 @@ public final class FortressPlugin extends JavaPlugin {
         File maps = new File(getDataFolder().getParentFile(), "PvPEngine/maps");
         File[] existing = maps.listFiles((dir, name) -> name.matches("fortress-\\d+\\.yml"));
 
-        if (existing != null && existing.length > 0) {
-            if (upToDate(existing)) {
-                return;
-            }
+        int wanted = Math.max(1, getConfig().getInt("map.instances", 2));
+        int have = existing == null ? 0 : existing.length;
+
+        if (have > 0 && !upToDate(existing)) {
             // The map's SHAPE changed — version 2 added the voting plains and had to raise
             // the ceiling to hold them. Keeping the old files would teleport players to a
-            // plain that was never built. Rebuild, and say so.
+            // plain that was never built. Rebuild them all, and say so.
             getLogger().warning("The fortress map is out of date (the shape changed). Rebuilding it.");
             for (File file : existing) {
                 file.delete();
             }
+            have = 0;
         }
 
-        int instances = Math.max(1, getConfig().getInt("map.instances", 2));
-        getLogger().info("No fortress map found — building " + instances + " …");
+        if (have >= wanted) {
+            return;
+        }
 
-        int blocks = new FortressMapBuilder(this, config).build(world, instances);
+        // Raising map.instances has to actually GIVE you the islands. Building "only if
+        // nothing exists" quietly ignored the new number: the config said four concurrent
+        // matches and the server had two, and the third pair of players simply waited in a
+        // queue that never moved, with nothing in the log to say why.
+        //
+        // The ones that already exist are left exactly as they are. Only the new indices are
+        // built — an island somebody is fighting on must not be rebuilt under them.
+        getLogger().info("Building fortress instances " + (have + 1) + "–" + wanted + " …");
 
-        getLogger().info("Fortress map built: " + blocks + " blocks, " + instances
-                + " instance(s). Restart or /pvpadmin reload to load them.");
+        int blocks = new FortressMapBuilder(this, config).build(world, have, wanted);
+
+        getLogger().info("Fortress map built: " + blocks + " blocks, " + (wanted - have)
+                + " new instance(s), " + wanted + " in total.");
     }
 
     /**

@@ -27,7 +27,10 @@ fortress:
 # instances = how many Fortress matches can run at the same time.
 map:
   world: fortress
-  instances: 2
+  # Each instance is a separate island, 256 blocks from the next. N instances = N Fortress
+  # matches at the same time. Raise it and the new islands are built on the next start;
+  # the ones already there are left alone.
+  instances: 4
 
 # The build zone: one instance per builder, in its own void world.
 build:
