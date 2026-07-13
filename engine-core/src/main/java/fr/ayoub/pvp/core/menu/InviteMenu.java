@@ -16,13 +16,11 @@ import java.util.List;
 /** Who you can invite: everyone in the lobby who is free. Click a head, done. */
 public final class InviteMenu extends Menu {
 
-    private static final int SLOT_BACK = 49;
-
     private final PvPEnginePlugin plugin;
-    private int page;
 
-    public InviteMenu(PvPEnginePlugin plugin) {
-        super(Component.text("Invite a player", NamedTextColor.DARK_GREEN), MenuLayout.bordered(6));
+    public InviteMenu(PvPEnginePlugin plugin, Menu parent) {
+        super(Component.text("Invite a player", NamedTextColor.DARK_GREEN),
+                MenuLayout.bordered(6), parent);
         this.plugin = plugin;
     }
 
@@ -43,9 +41,10 @@ public final class InviteMenu extends Menu {
                     Component.text("Nobody is available", NamedTextColor.RED),
                     Component.text("Players already in a party, in a queue", NamedTextColor.GRAY),
                     Component.text("or in a match are not shown.", NamedTextColor.GRAY)));
+            return;
         }
 
-        List<Player> shown = layout().pageItems(candidates, page);
+        List<Player> shown = pageItems(candidates);
         for (int i = 0; i < shown.size(); i++) {
             Player target = shown.get(i);
 
@@ -59,25 +58,5 @@ public final class InviteMenu extends Menu {
         }
 
         paginate(viewer, candidates.size());
-
-        set(SLOT_BACK, Icons.of(Material.ARROW, Component.text("Back", NamedTextColor.YELLOW)),
-                event -> new PartyMenu(plugin).open(viewer));
-    }
-
-    private void paginate(Player viewer, int total) {
-        if (page > 0) {
-            set(45, Icons.of(Material.ARROW, Component.text("Previous page", NamedTextColor.YELLOW)),
-                    event -> {
-                        page--;
-                        refresh(viewer);
-                    });
-        }
-        if (page < layout().pageCount(total) - 1) {
-            set(53, Icons.of(Material.ARROW, Component.text("Next page", NamedTextColor.YELLOW)),
-                    event -> {
-                        page++;
-                        refresh(viewer);
-                    });
-        }
     }
 }

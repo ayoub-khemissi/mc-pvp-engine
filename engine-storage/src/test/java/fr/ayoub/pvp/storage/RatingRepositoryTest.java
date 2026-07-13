@@ -103,6 +103,54 @@ class RatingRepositoryTest {
         assertTrue(ratings.top("dodgeball", ONE_V_ONE, 10).isEmpty());
     }
 
+    // --- the leaderboard is paged in SQL, never in memory -----------------------
+
+    /** Ranks 1..n, all in the same mode/format. */
+    private void ladderOf(int players) {
+        for (int i = 0; i < players; i++) {
+            int rating = 2000 - i;   // "P0" is the best
+            ratings.save(player("P" + i), DUEL, ONE_V_ONE,
+                    new RatingRow(rating, rating, 10, 5, 5, 0));
+        }
+    }
+
+    @Test
+    void aPageIsASliceOfTheLadder() {
+        ladderOf(25);
+
+        List<LeaderboardEntry> second = ratings.page(DUEL, ONE_V_ONE, 10, 10);
+
+        assertEquals(10, second.size());
+        assertEquals("P10", second.getFirst().username(), "page 2 starts at rank 11");
+        assertEquals("P19", second.getLast().username());
+    }
+
+    @Test
+    void theLastPageIsWhateverIsLeft() {
+        ladderOf(25);
+
+        List<LeaderboardEntry> third = ratings.page(DUEL, ONE_V_ONE, 20, 10);
+
+        assertEquals(5, third.size());
+        assertEquals("P20", third.getFirst().username());
+    }
+
+    @Test
+    void aPagePastTheEndIsEmpty() {
+        ladderOf(3);
+
+        assertTrue(ratings.page(DUEL, ONE_V_ONE, 30, 10).isEmpty());
+    }
+
+    @Test
+    void theLadderCanBeCounted() {
+        ladderOf(25);
+        ratings.save(player("Other"), "dodgeball", ONE_V_ONE, new RatingRow(1500, 1500, 1, 1, 0, 1));
+
+        assertEquals(25, ratings.countRanked(DUEL, ONE_V_ONE), "another mode does not count");
+        assertEquals(0, ratings.countRanked(DUEL, "5v5"));
+    }
+
     // --- the profile needs every rating a player has ---------------------------
 
     @Test

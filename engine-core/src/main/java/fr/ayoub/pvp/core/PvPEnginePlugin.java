@@ -109,7 +109,7 @@ public final class PvPEnginePlugin extends JavaPlugin {
         queueService = new QueueService(this);
         partyService = new PartyService(this, getConfig().getInt("party.max-size", 5));
 
-        getServer().getPluginManager().registerEvents(new MenuListener(), this);
+        getServer().getPluginManager().registerEvents(new MenuListener(this), this);
         getServer().getPluginManager().registerEvents(new LobbyListener(this, lobbyService, hotbarItems), this);
         getServer().getPluginManager().registerEvents(new WallListener(arenaService), this);
         getServer().getPluginManager().registerEvents(new MatchListener(matchService), this);

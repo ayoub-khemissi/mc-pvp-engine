@@ -57,8 +57,10 @@ public final class ProfileMenu extends Menu {
             return;
         }
 
-        for (int i = 0; i < ratings.size() && i < layout().itemsPerPage(); i++) {
-            RatingEntry entry = ratings.get(i);
+        List<RatingEntry> shown = pageItems(ratings);
+
+        for (int i = 0; i < shown.size(); i++) {
+            RatingEntry entry = shown.get(i);
             Division division = ladder.of(entry.row().rating());
             Optional<Division> next = ladder.next(entry.row().rating());
 
@@ -82,8 +84,11 @@ public final class ProfileMenu extends Menu {
                                     .orElse(Component.text("Top division", NamedTextColor.DARK_GRAY)),
                             Component.empty(),
                             Component.text("Click for the leaderboard", NamedTextColor.GREEN)),
-                    event -> new LeaderboardMenu(plugin, entry.modeId(), entry.format()).open(viewer));
+                    event -> new LeaderboardMenu(plugin, entry.modeId(), entry.format(), this)
+                            .open(viewer));
         }
+
+        paginate(viewer, ratings.size());
     }
 
     private static String streakOf(RatingEntry entry) {

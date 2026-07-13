@@ -5,7 +5,10 @@ import fr.ayoub.pvp.core.ui.Icons;
 import fr.ayoub.pvp.core.ui.Menu;
 import fr.ayoub.pvp.domain.party.Invite;
 import fr.ayoub.pvp.domain.party.Party;
+import fr.ayoub.pvp.domain.rating.Division;
+import fr.ayoub.pvp.domain.rating.DivisionLadder;
 import fr.ayoub.pvp.domain.ui.MenuLayout;
+import fr.ayoub.pvp.storage.RatingEntry;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -13,13 +16,20 @@ import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * The party screen: who is in it, who invited you, and the two or three buttons that
- * are all a player ever needs. No commands.
+ * The party screen: who is in it, how good they are, who invited you, and the two or three
+ * buttons that are all a player ever needs. No commands.
+ *
+ * Every member's ratings are read from the database (off the main thread) and shown in the
+ * tooltip of their head — you should be able to see who you are queueing with before you
+ * queue with them.
  */
 public final class PartyMenu extends Menu {
 
@@ -28,10 +38,21 @@ public final class PartyMenu extends Menu {
     private static final int SLOT_LEAVE = 33;
 
     private final PvPEnginePlugin plugin;
+    private final DivisionLadder ladder;
+
+    private final Map<UUID, List<RatingEntry>> ratings = new HashMap<>();
+    private boolean loading = true;
 
     public PartyMenu(PvPEnginePlugin plugin) {
         super(Component.text("Party", NamedTextColor.LIGHT_PURPLE), MenuLayout.bordered(4));
         this.plugin = plugin;
+        this.ladder = plugin.matches().ratings().ladder();
+    }
+
+    @Override
+    public void open(Player viewer) {
+        super.open(viewer);
+        loadRatings(viewer);
     }
 
     @Override
@@ -57,27 +78,58 @@ public final class PartyMenu extends Menu {
         for (int i = 0; i < members.size() && i < layout().itemsPerPage(); i++) {
             UUID member = members.get(i);
             OfflinePlayer owner = Bukkit.getOfflinePlayer(member);
+
             boolean isLeader = party.isLeader(member);
             boolean viewerLeads = party.isLeader(viewer.getUniqueId());
             boolean self = member.equals(viewer.getUniqueId());
 
-            Component role = isLeader
+            List<Component> lore = new ArrayList<>();
+            lore.add(isLeader
                     ? Component.text("Leader", NamedTextColor.GOLD)
-                    : Component.text("Member", NamedTextColor.GRAY);
+                    : Component.text("Member", NamedTextColor.GRAY));
+            lore.add(Component.empty());
+            lore.addAll(ratingLines(member));
 
-            Component action = viewerLeads && !self
-                    ? Component.text("Click to remove", NamedTextColor.RED)
-                    : Component.empty();
+            if (viewerLeads && !self) {
+                lore.add(Component.empty());
+                lore.add(Component.text("Click to remove", NamedTextColor.RED));
+            }
 
             set(layout().slotAt(i), Icons.head(owner,
-                            Component.text(name(owner), NamedTextColor.WHITE), role, action),
+                            Component.text(name(owner), NamedTextColor.WHITE),
+                            lore.toArray(Component[]::new)),
                     event -> {
                         if (viewerLeads && !self) {
                             plugin.parties().kick(viewer, member);
-                            refresh(viewer);
+                            reload(viewer);
                         }
                     });
         }
+    }
+
+    /** What a teammate is worth, mode by mode. This is the "hover to see their Elo". */
+    private List<Component> ratingLines(UUID member) {
+        if (loading) {
+            return List.of(Component.text("Loading rating…", NamedTextColor.DARK_GRAY));
+        }
+
+        List<RatingEntry> found = ratings.getOrDefault(member, List.of());
+        if (found.isEmpty()) {
+            return List.of(Component.text("Unranked", NamedTextColor.DARK_GRAY));
+        }
+
+        List<Component> lines = new ArrayList<>();
+        for (RatingEntry entry : found) {
+            Division division = ladder.of(entry.row().rating());
+
+            lines.add(Component.text(entry.modeId() + " " + entry.format() + "  ",
+                            NamedTextColor.GRAY)
+                    .append(Component.text(entry.row().rating(), NamedTextColor.WHITE))
+                    .append(Component.text("  " + division.display(), NamedTextColor.AQUA))
+                    .append(Component.text("  " + entry.row().wins() + "W/" + entry.row().losses() + "L",
+                            NamedTextColor.DARK_GRAY)));
+        }
+        return lines;
     }
 
     private void showInviteButton(Player viewer, Party party) {
@@ -96,7 +148,7 @@ public final class PartyMenu extends Menu {
                         Component.text("Invite a player", NamedTextColor.GREEN),
                         Component.text("Up to " + plugin.parties().maxSize() + " per party",
                                 NamedTextColor.GRAY)),
-                event -> new InviteMenu(plugin).open(viewer));
+                event -> new InviteMenu(plugin, this).open(viewer));
     }
 
     private void showPendingInvite(Player viewer) {
@@ -116,7 +168,7 @@ public final class PartyMenu extends Menu {
                     } else {
                         plugin.parties().accept(viewer);
                     }
-                    refresh(viewer);
+                    reload(viewer);
                 });
     }
 
@@ -146,6 +198,38 @@ public final class PartyMenu extends Menu {
                     plugin.parties().leave(viewer);
                     viewer.closeInventory();
                 });
+    }
+
+    /** The party changed: redraw now, and fetch the new member's ratings behind it. */
+    private void reload(Player viewer) {
+        refresh(viewer);
+        loadRatings(viewer);
+    }
+
+    private void loadRatings(Player viewer) {
+        Optional<Party> party = plugin.parties().partyOf(viewer);
+        if (party.isEmpty()) {
+            loading = false;
+            return;
+        }
+
+        List<UUID> members = party.get().members();
+
+        plugin.async().execute(() -> {
+            Map<UUID, List<RatingEntry>> found = new HashMap<>();
+            for (UUID member : members) {
+                found.put(member, plugin.ratings().findAllFor(member));
+            }
+
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                ratings.clear();
+                ratings.putAll(found);
+                loading = false;
+                if (viewer.isOnline()) {
+                    refresh(viewer);
+                }
+            });
+        });
     }
 
     private static String name(OfflinePlayer player) {

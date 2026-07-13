@@ -1,14 +1,9 @@
 package fr.ayoub.pvp.core.lobby;
 
 import fr.ayoub.pvp.core.PvPEnginePlugin;
-import fr.ayoub.pvp.core.menu.PartyMenu;
-import fr.ayoub.pvp.core.menu.PlayMenu;
-import fr.ayoub.pvp.core.menu.ProfileMenu;
-import fr.ayoub.pvp.core.menu.SpectateMenu;
+import fr.ayoub.pvp.core.menu.Menus;
 import fr.ayoub.pvp.core.ui.Menu;
 import fr.ayoub.pvp.core.ui.Sidebar;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -74,22 +69,7 @@ public final class LobbyListener implements Listener {
 
         hotbar.actionOf(event.getItem()).ifPresent(hotbarAction -> {
             event.setCancelled(true);
-
-            switch (hotbarAction) {
-                case HotbarItems.ACTION_PLAY -> new PlayMenu(plugin).open(player);
-                case HotbarItems.ACTION_PARTY -> new PartyMenu(plugin).open(player);
-                case HotbarItems.ACTION_PROFILE -> new ProfileMenu(plugin).open(player);
-                case HotbarItems.ACTION_SPECTATE -> new SpectateMenu(plugin).open(player);
-                case HotbarItems.ACTION_LEAVE_QUEUE -> {
-                    plugin.queue().leave(player);
-                    player.getInventory().setItem(HotbarItems.SLOT_LEAVE_QUEUE, null);
-                    player.sendMessage(Component.text("You left the queue.", NamedTextColor.YELLOW));
-                    Sidebar.update(plugin, player);
-                }
-                default -> {
-                    // unknown action — ignore
-                }
-            }
+            Menus.open(plugin, player, hotbarAction);
         });
     }
 

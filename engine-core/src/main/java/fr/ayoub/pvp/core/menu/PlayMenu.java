@@ -18,7 +18,7 @@ public final class PlayMenu extends Menu {
     private final PvPEnginePlugin plugin;
 
     public PlayMenu(PvPEnginePlugin plugin) {
-        super(Component.text("Play", NamedTextColor.DARK_GREEN), MenuLayout.bordered(3));
+        super(Component.text("Play", NamedTextColor.DARK_GREEN), MenuLayout.bordered(4));
         this.plugin = plugin;
     }
 
@@ -27,17 +27,20 @@ public final class PlayMenu extends Menu {
         List<GameModeDefinition> modes = plugin.modes().all();
 
         if (modes.isEmpty()) {
-            set(layout().slotAt(0), Icons.of(Material.BARRIER,
+            set(layout().slotAt(4), Icons.of(Material.BARRIER,
                     Component.text("No game mode installed", NamedTextColor.RED),
                     Component.text("Add a mode plugin (e.g. ModeDuel).", NamedTextColor.GRAY)));
             return;
         }
 
-        for (int i = 0; i < modes.size() && i < layout().itemsPerPage(); i++) {
-            GameModeDefinition mode = modes.get(i);
+        List<GameModeDefinition> shown = pageItems(modes);
+        for (int i = 0; i < shown.size(); i++) {
+            GameModeDefinition mode = shown.get(i);
 
             set(layout().slotAt(i), mode.icon(), event ->
-                    new FormatMenu(plugin, mode).open(viewer));
+                    new FormatMenu(plugin, mode, this).open(viewer));
         }
+
+        paginate(viewer, modes.size());
     }
 }

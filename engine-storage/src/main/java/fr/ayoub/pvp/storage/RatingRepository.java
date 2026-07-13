@@ -139,6 +139,19 @@ public final class RatingRepository {
 
     /** Top players of a mode/format, best first. */
     public List<LeaderboardEntry> top(String modeId, String format, int limit) {
+        return page(modeId, format, 0, limit);
+    }
+
+    /**
+     * One page of the ladder, best first.
+     *
+     * Paged in <b>SQL</b>: with ten thousand ranked players, loading the whole ladder to
+     * show ten of them would be a slow query and a big allocation, on a thread the server
+     * is waiting on.
+     *
+     * @param offset how many players to skip (page × pageSize)
+     */
+    public List<LeaderboardEntry> page(String modeId, String format, int offset, int limit) {
         List<LeaderboardEntry> entries = new ArrayList<>();
 
         try (Connection connection = dataSource.getConnection();
@@ -147,13 +160,14 @@ public final class RatingRepository {
                      FROM ratings r
                      JOIN players p ON p.uuid = r.uuid
                      WHERE r.mode_id = ? AND r.team_format = ?
-                     ORDER BY r.rating DESC
-                     LIMIT ?
+                     ORDER BY r.rating DESC, p.username ASC
+                     LIMIT ? OFFSET ?
                      """)) {
 
             select.setString(1, modeId);
             select.setString(2, format);
             select.setInt(3, limit);
+            select.setInt(4, Math.max(0, offset));
 
             try (ResultSet rs = select.executeQuery()) {
                 while (rs.next()) {
@@ -170,5 +184,23 @@ public final class RatingRepository {
             throw new IllegalStateException("could not load leaderboard for " + modeId + "/" + format, e);
         }
         return entries;
+    }
+
+    /** How many players are ranked in this mode/format — the page count comes from this. */
+    public int countRanked(String modeId, String format) {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement select = connection.prepareStatement("""
+                     SELECT COUNT(*) FROM ratings WHERE mode_id = ? AND team_format = ?
+                     """)) {
+
+            select.setString(1, modeId);
+            select.setString(2, format);
+
+            try (ResultSet rs = select.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("could not count the ladder for " + modeId + "/" + format, e);
+        }
     }
 }

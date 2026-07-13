@@ -23,7 +23,7 @@ public final class SpectateMenu extends Menu {
     private final PvPEnginePlugin plugin;
 
     public SpectateMenu(PvPEnginePlugin plugin) {
-        super(Component.text("Spectate", NamedTextColor.DARK_AQUA), MenuLayout.bordered(4));
+        super(Component.text("Spectate", NamedTextColor.DARK_AQUA), MenuLayout.bordered(6));
         this.plugin = plugin;
     }
 
@@ -40,8 +40,10 @@ public final class SpectateMenu extends Menu {
             return;
         }
 
-        for (int i = 0; i < matches.size() && i < layout().itemsPerPage(); i++) {
-            Match match = matches.get(i);
+        List<Match> shown = pageItems(matches);
+
+        for (int i = 0; i < shown.size(); i++) {
+            Match match = shown.get(i);
 
             List<Component> lore = new ArrayList<>();
             for (Team team : match.teams()) {
@@ -61,6 +63,8 @@ public final class SpectateMenu extends Menu {
                         plugin.matches().spectate(viewer, match);
                     });
         }
+
+        paginate(viewer, matches.size());
     }
 
     private static String names(List<UUID> members) {

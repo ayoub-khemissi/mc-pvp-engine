@@ -16,10 +16,15 @@ import org.bukkit.entity.Player;
 import java.util.ArrayList;
 import java.util.List;
 
-/** The top players of one mode / format. */
+/**
+ * The ladder of one mode / format.
+ *
+ * Only the page being looked at is read from the database — with ten thousand ranked
+ * players, loading the whole ladder to show twenty-eight of them would be a slow query on
+ * a thread the server waits on. The paging in {@link Menu} therefore has to re-fetch, which
+ * is what {@link #onPageChanged} is for.
+ */
 public final class LeaderboardMenu extends Menu {
-
-    private static final int TOP = 10;
 
     private final PvPEnginePlugin plugin;
     private final String modeId;
@@ -27,11 +32,12 @@ public final class LeaderboardMenu extends Menu {
     private final DivisionLadder ladder;
 
     private List<LeaderboardEntry> entries = new ArrayList<>();
+    private int total;
     private boolean loading = true;
 
-    public LeaderboardMenu(PvPEnginePlugin plugin, String modeId, String format) {
-        super(Component.text("Top " + TOP + " — " + modeId + " " + format, NamedTextColor.GOLD),
-                MenuLayout.bordered(4));
+    public LeaderboardMenu(PvPEnginePlugin plugin, String modeId, String format, Menu parent) {
+        super(Component.text("Ladder — " + modeId + " " + format, NamedTextColor.GOLD),
+                MenuLayout.bordered(6), parent);
         this.plugin = plugin;
         this.modeId = modeId;
         this.format = format;
@@ -45,9 +51,18 @@ public final class LeaderboardMenu extends Menu {
     }
 
     @Override
+    protected void onPageChanged(Player viewer) {
+        loading = true;
+        refresh(viewer);
+        load(viewer);
+    }
+
+    @Override
     protected void build(Player viewer) {
         if (loading) {
-            set(layout().slotAt(0), Icons.of(Material.CLOCK, Component.text("Loading…", NamedTextColor.GRAY)));
+            set(layout().slotAt(0), Icons.of(Material.CLOCK,
+                    Component.text("Loading…", NamedTextColor.GRAY)));
+            paginate(viewer, total);   // keep the buttons where they are while it loads
             return;
         }
 
@@ -57,15 +72,16 @@ public final class LeaderboardMenu extends Menu {
             return;
         }
 
-        for (int i = 0; i < entries.size() && i < layout().itemsPerPage(); i++) {
+        int firstRank = page() * layout().itemsPerPage() + 1;
+
+        for (int i = 0; i < entries.size(); i++) {
             LeaderboardEntry entry = entries.get(i);
             Division division = ladder.of(entry.rating());
-            int rank = i + 1;
+            int rank = firstRank + i;
 
             boolean isViewer = entry.uuid().equals(viewer.getUniqueId());
 
-            set(layout().slotAt(i), Icons.of(
-                    isViewer ? Material.NETHER_STAR : Material.PLAYER_HEAD,
+            set(layout().slotAt(i), Icons.head(Bukkit.getOfflinePlayer(entry.uuid()),
                     Component.text("#" + rank + " " + entry.username(),
                             isViewer ? NamedTextColor.GREEN : NamedTextColor.YELLOW),
                     Component.text("Rating: ", NamedTextColor.GRAY)
@@ -76,14 +92,21 @@ public final class LeaderboardMenu extends Menu {
                             .append(Component.text(entry.wins() + "W / " + entry.losses() + "L",
                                     NamedTextColor.WHITE))));
         }
+
+        paginate(viewer, total);
     }
 
     private void load(Player viewer) {
+        int offset = page() * layout().itemsPerPage();
+        int limit = layout().itemsPerPage();
+
         plugin.async().execute(() -> {
-            List<LeaderboardEntry> found = plugin.ratings().top(modeId, format, TOP);
+            List<LeaderboardEntry> found = plugin.ratings().page(modeId, format, offset, limit);
+            int count = plugin.ratings().countRanked(modeId, format);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 entries = found;
+                total = count;
                 loading = false;
                 if (viewer.isOnline()) {
                     refresh(viewer);
