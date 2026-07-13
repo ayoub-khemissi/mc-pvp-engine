@@ -43,7 +43,7 @@ public final class SlotMenu extends Menu {
         this.config = config;
         this.zones = zones;
         this.fortresses = fortresses;
-        this.plugin = Bukkit.getPluginManager().getPlugin("ModeFortress");
+        this.plugin = zones.plugin();   // never look a plugin up by name — it can return null
     }
 
     @Override
@@ -66,8 +66,10 @@ public final class SlotMenu extends Menu {
             int number = slot;
 
             if (fortress == null) {
-                set(at, Icons.of(Material.LIGHT_GRAY_STAINED_GLASS_PANE,
-                                Component.text("Slot " + slot + " — empty", NamedTextColor.GRAY),
+                // Not a glass pane: in a chest GUI a pale pane reads as an empty slot, which
+                // is precisely the thing it was supposed to distinguish itself from.
+                set(at, Icons.of(Material.CRAFTING_TABLE,
+                                Component.text("Slot " + slot + " — empty", NamedTextColor.YELLOW),
                                 Component.text("Click to start building.", NamedTextColor.GREEN)),
                         event -> enter(viewer, number));
                 continue;

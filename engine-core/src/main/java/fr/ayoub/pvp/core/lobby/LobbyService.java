@@ -37,9 +37,17 @@ public final class LobbyService {
         giveItems(player);
     }
 
-    /** In the lobby = not inside an arena. */
+    /**
+     * In the lobby = standing in the lobby's <b>world</b>, and not inside an arena.
+     *
+     * The world check is not a detail. A game mode may create a world of its own — Fortress
+     * has a build zone — and everything the lobby does to "its" players (cancel their
+     * damage, cancel their drops, rescue them from the void) would otherwise reach into it.
+     * Without this, a builder standing 36 blocks below the lobby platform, in another world
+     * entirely, was rescued from a void he was never in, on every single step.
+     */
     public boolean isInLobby(Player player) {
-        return !arenas.isInArena(player);
+        return player.getWorld().equals(spawn.getWorld()) && !arenas.isInArena(player);
     }
 
     public Location spawn() {
