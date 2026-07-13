@@ -3,7 +3,7 @@ version: '0.1.0'
 main: fr.ayoub.pvp.mode.fortress.FortressPlugin
 api-version: '26.1'
 author: Ayoub
-description: Build a fortress, defend your Power Crystal, break theirs.
+description: Build a fortress, defend your End Crystal, break theirs.
 
 # The engine must load first — its classes (engine-api, engine-domain) come from its jar,
 # and so does the database pool this mode stores its fortresses in.

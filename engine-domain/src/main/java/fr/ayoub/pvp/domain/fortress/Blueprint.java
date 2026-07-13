@@ -4,10 +4,17 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * A fortress, as data: a cube of block ids, plus where the Power Crystal stands.
+ * A fortress, as data: a cube of block ids, plus where the End Crystal stands.
  *
  * The cube's <b>size is a parameter</b> — 20 today, and everything about Fortress is still
  * an experiment. Nothing here may assume 20.
+ *
+ * <p><b>The front of the fortress is the {@code z = 0} face.</b> That is the side the enemy
+ * arrives from, and the side the engine turns towards them when it pastes the build into an
+ * arena. A fortress is not symmetric — the gate goes on one side and the cliff on the other
+ * — so this convention has to be written down somewhere, and this is the somewhere. The
+ * build zone paints an arrow on the floor in front of that face, so the builder is never
+ * guessing which way they are facing.
  *
  * Block ids are plain strings ("STONE", "OBSIDIAN"), not Bukkit Materials: this is the
  * domain, it must stay testable with no server. The crystal is a position rather than a
@@ -72,7 +79,7 @@ public final class Blueprint {
         set(pos.x(), pos.y(), pos.z(), block);
     }
 
-    /** Where the Power Crystal stands, or null while the build has none. */
+    /** Where the End Crystal stands, or null while the build has none. */
     public BlockPos crystal() {
         return crystal;
     }

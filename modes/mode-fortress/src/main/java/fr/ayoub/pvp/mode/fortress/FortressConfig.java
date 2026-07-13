@@ -5,8 +5,12 @@ import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.logging.Logger;
 
 /**
@@ -21,7 +25,11 @@ import java.util.logging.Logger;
  */
 public final class FortressConfig {
 
+    /** Eight blocks and the crystal — a hotbar is nine slots wide. */
+    public static final int HOTBAR_BLOCKS = 8;
+
     private final BuildRules buildRules;
+    private final List<String> hotbar;
 
     private final int slots;
     private final String buildWorld;
@@ -44,6 +52,34 @@ public final class FortressConfig {
                 config.getString("fortress.crystal.base", "OBSIDIAN"),
                 config.getInt("fortress.crystal.clearance-radius", 1),
                 config.getInt("fortress.crystal.clearance-height", 3));
+
+        this.hotbar = bestBlocks(buildRules.allowance().keySet());
+    }
+
+    /**
+     * The blocks that go straight into the builder's hotbar, best first.
+     *
+     * "Best" is not my opinion: for a fortress, a good block is one that takes a long time
+     * to break and survives an explosion. So they are ranked by <b>blast resistance, then
+     * hardness</b> — the game's own numbers. Change the palette and the hotbar re-sorts
+     * itself; nobody has to maintain a second list that silently drifts out of date.
+     */
+    private static List<String> bestBlocks(Collection<String> palette) {
+        return palette.stream()
+                .map(Material::matchMaterial)
+                .filter(Objects::nonNull)
+                .sorted(Comparator
+                        .comparingDouble(Material::getBlastResistance).reversed()
+                        .thenComparing(Comparator.comparingDouble(Material::getHardness).reversed())
+                        .thenComparing(Material::name))
+                .limit(HOTBAR_BLOCKS)
+                .map(Material::name)
+                .toList();
+    }
+
+    /** Eight block ids, hardest first. The ninth hotbar slot is the End Crystal. */
+    public List<String> hotbarBlocks() {
+        return hotbar;
     }
 
     private static Map<String, Integer> readPalette(FileConfiguration config, Logger logger) {

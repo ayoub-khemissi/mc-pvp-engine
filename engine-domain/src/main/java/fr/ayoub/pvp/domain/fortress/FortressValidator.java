@@ -43,24 +43,24 @@ public final class FortressValidator {
         BlockPos crystal = blueprint.crystal();
 
         if (crystal == null) {
-            problems.add("No Power Crystal: place one to make this fortress playable.");
+            problems.add("No End Crystal: place one to make this fortress playable.");
             return;
         }
         if (!blueprint.contains(crystal)) {
-            problems.add("The Power Crystal is outside the fortress.");
+            problems.add("The End Crystal is outside the fortress.");
             return;
         }
 
         BlockPos base = crystal.below();
         if (!blueprint.contains(base)) {
-            problems.add("The Power Crystal has nothing under it — it needs a "
+            problems.add("The End Crystal has nothing under it — it needs a "
                     + rules.crystalBase() + " block to stand on.");
             return;
         }
 
         String under = blueprint.get(base);
         if (!under.equals(rules.crystalBase())) {
-            problems.add("The Power Crystal must stand on " + rules.crystalBase()
+            problems.add("The End Crystal must stand on " + rules.crystalBase()
                     + ", not on " + (Blueprint.AIR.equals(under) ? "thin air" : under) + ".");
         }
 
@@ -83,7 +83,7 @@ public final class FortressValidator {
                         continue;
                     }
                     problems.add("A " + blueprint.get(pos) + " at " + pos
-                            + " is inside the Power Crystal's clearance — it must stay open.");
+                            + " is inside the End Crystal's clearance — it must stay open.");
                     return;   // one is enough; the menu shows where, the player sees the rest
                 }
             }

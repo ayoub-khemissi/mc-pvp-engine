@@ -8,7 +8,7 @@ fortress:
   # How many fortresses a player may keep. One of them is the default.
   slots: 3
 
-  # The Power Crystal must stand on this block, and keep a pocket of air around itself —
+  # The End Crystal must stand on this block, and keep a pocket of air around itself —
   # that pocket is what stops a fortress from being a solid cube of obsidian.
   crystal:
     base: OBSIDIAN

@@ -18,7 +18,7 @@ import org.bukkit.inventory.ItemStack;
 import java.util.List;
 
 /**
- * Fortress: two teams, two fortresses, two Power Crystals. Break theirs, or out-kill them
+ * Fortress: two teams, two fortresses, two End Crystals. Break theirs, or out-kill them
  * in thirty minutes.
  *
  * The match itself is not wired yet — this milestone is the build zone. What is real today:

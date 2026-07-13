@@ -7,14 +7,14 @@ import java.util.Objects;
  * What a player is allowed to build.
  *
  * <b>Every number here is a knob.</b> Fortress is an experiment: the cube size, the block
- * list, how many of each, and how much room the Power Crystal needs are all still being
+ * list, how many of each, and how much room the End Crystal needs are all still being
  * tuned. None of them may be hard-coded anywhere else — they come from config.yml, land
  * here, and this is the only thing the rules read.
  *
  * @param size             the fortress cube, in blocks (20 today)
  * @param allowance        block id → how many of it a fortress may contain.
  *                         A block that is not a key here cannot be placed at all.
- * @param crystalBase      the block the Power Crystal must stand on ("OBSIDIAN")
+ * @param crystalBase      the block the End Crystal must stand on ("OBSIDIAN")
  * @param clearanceRadius  how far around the crystal must stay empty.
  *                         1 → a 3×3 footprint, 2 → 5×5.
  * @param clearanceHeight  how many blocks above the base must stay empty
