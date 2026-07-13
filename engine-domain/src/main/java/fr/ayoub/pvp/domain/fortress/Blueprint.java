@@ -61,6 +61,26 @@ public final class Blueprint {
         return get(pos.x(), pos.y(), pos.z());
     }
 
+    /**
+     * The block's <b>type</b>, with its state stripped off.
+     *
+     * A cell holds the whole state a block was placed in ("oak_door[half=upper]"), because a
+     * fortress pasted without orientation is a fortress with every stair facing east. But
+     * every rule — the palette, the quotas, what the crystal stands on — is about the type.
+     */
+    public String typeAt(int x, int y, int z) {
+        return BlockIds.typeOf(get(x, y, z));
+    }
+
+    public String typeAt(BlockPos pos) {
+        return typeAt(pos.x(), pos.y(), pos.z());
+    }
+
+    public boolean isAir(BlockPos pos) {
+        return AIR.equals(typeAt(pos));
+    }
+
+    /** @param block a block <b>state</b> — "STONE", or "minecraft:oak_door[half=upper,…]" */
     public void set(int x, int y, int z, String block) {
         int index = index(x, y, z);
         String previous = blocks[index];
@@ -120,16 +140,19 @@ public final class Blueprint {
         return (y * size + z) * size + x;
     }
 
+    /** Counted by TYPE: both halves of a door cost the same door, whichever way it faces. */
     private void increment(String block) {
-        if (!AIR.equals(block)) {
-            counts.merge(block, 1, Integer::sum);
+        String type = BlockIds.typeOf(block);
+        if (!AIR.equals(type)) {
+            counts.merge(type, 1, Integer::sum);
         }
     }
 
     private void decrement(String block) {
-        if (AIR.equals(block)) {
+        String type = BlockIds.typeOf(block);
+        if (AIR.equals(type)) {
             return;
         }
-        counts.computeIfPresent(block, (key, count) -> count == 1 ? null : count - 1);
+        counts.computeIfPresent(type, (key, count) -> count == 1 ? null : count - 1);
     }
 }

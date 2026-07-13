@@ -150,4 +150,60 @@ class FortressLibraryTest {
         assertTrue(library(GENEROUS).listFor(owner).isEmpty());
         assertTrue(library(GENEROUS).playableFor(owner).isEmpty());
     }
+
+    // --- the last gate: nothing invalid ever reaches an arena -----------------------
+
+    @Test
+    void aMatchCanOnlyEverPasteAValidFortress() {
+        // Validating at the queue is necessary and NOT sufficient: a vote runs between the
+        // queue and the paste, and the rules could be reloaded in between. So the match
+        // cannot even OBTAIN a blueprint that today's rules reject — it is not a check next
+        // to the paste that somebody can forget to write, it is the only way to get one.
+        saveAFortressUsingFiveObsidian(1);
+
+        assertTrue(library(GENEROUS).forMatch(owner, 1).isPresent());
+        assertTrue(library(TIGHTENED).forMatch(owner, 1).isEmpty(),
+                "the rules moved: this fortress must not reach an arena");
+    }
+
+    @Test
+    void aMissingSlotIsNotPasteable() {
+        assertTrue(library(GENEROUS).forMatch(owner, 3).isEmpty());
+    }
+
+    @Test
+    void theTeamsFallbackIsAlsoChecked() {
+        // The default fortress is what a team plays when nobody votes. It gets no free pass.
+        saveAFortressUsingFiveObsidian(1);
+
+        assertTrue(library(GENEROUS).defaultForMatch(owner).isPresent());
+        assertTrue(library(TIGHTENED).defaultForMatch(owner).isEmpty());
+    }
+
+    @Test
+    void aDraftIsNeverPasteable() {
+        Blueprint noCrystal = new Blueprint(SIZE);
+        noCrystal.set(1, 1, 1, "STONE");
+        repository.save(new SavedFortress(owner, 1, "Draft", noCrystal, false, true));
+
+        assertTrue(library(GENEROUS).forMatch(owner, 1).isEmpty());
+        assertTrue(library(GENEROUS).defaultForMatch(owner).isEmpty());
+    }
+
+    @Test
+    void aBlockStateDoesNotSneakPastTheQuota() {
+        // The obvious exploit if anything compared raw strings: place the block with its
+        // state attached and hope "minecraft:obsidian[…]" does not count as OBSIDIAN.
+        Blueprint blueprint = new Blueprint(SIZE);
+        blueprint.set(5, 0, 5, "minecraft:obsidian");
+        blueprint.crystal(new BlockPos(5, 1, 5));
+        for (int i = 0; i < 4; i++) {
+            blueprint.set(i, 4, 0, "minecraft:obsidian");
+        }
+        repository.save(new SavedFortress(owner, 1, "Sneaky", blueprint, true, true));
+
+        assertTrue(library(GENEROUS).forMatch(owner, 1).isPresent(), "five obsidian, quota eight");
+        assertTrue(library(TIGHTENED).forMatch(owner, 1).isEmpty(),
+                "five obsidian, quota two — the state hides nothing");
+    }
 }

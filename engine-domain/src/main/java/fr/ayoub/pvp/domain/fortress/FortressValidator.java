@@ -73,7 +73,7 @@ public final class FortressValidator {
             return;
         }
 
-        String under = blueprint.get(base);
+        String under = blueprint.typeAt(base);
         if (!under.equals(rules.crystalBase())) {
             problems.add("The End Crystal must stand on " + rules.crystalBase()
                     + ", not on " + (Blueprint.AIR.equals(under) ? "thin air" : under) + ".");
@@ -94,10 +94,10 @@ public final class FortressValidator {
 
                     // A crystal near an edge has part of its clearance outside the cube.
                     // That is not a problem: there is nothing there to remove.
-                    if (!blueprint.contains(pos) || Blueprint.AIR.equals(blueprint.get(pos))) {
+                    if (!blueprint.contains(pos) || blueprint.isAir(pos)) {
                         continue;
                     }
-                    problems.add("A " + blueprint.get(pos) + " at " + pos
+                    problems.add("A " + blueprint.typeAt(pos) + " at " + pos
                             + " is inside the End Crystal's clearance — it must stay open.");
                     return;   // one is enough; the menu shows where, the player sees the rest
                 }

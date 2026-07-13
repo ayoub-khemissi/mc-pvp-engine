@@ -200,6 +200,53 @@ class FortressValidatorTest {
                         + report.problems());
     }
 
+    // --- the rules see through a block's state -------------------------------------
+
+    @Test
+    void aBlockStateDoesNotHideWhatTheBlockIs() {
+        // The obvious way round the palette, if the rules only compared strings: place the
+        // block with its state attached and hope "minecraft:bedrock[…]" does not look like
+        // "BEDROCK". It does.
+        aValidFortress();
+        blueprint.set(1, 1, 1, "minecraft:bedrock");
+
+        BuildReport report = check();
+
+        assertFalse(report.valid());
+        assertTrue(mentions(report, "BEDROCK"));
+    }
+
+    @Test
+    void aQuotaCountsABlockWhicheverWayItFaces() {
+        BuildRules stone = new BuildRules(SIZE, Map.of("OBSIDIAN", 8, "STONE_BRICK_STAIRS", 2),
+                "OBSIDIAN", 1, 3);
+        aValidFortress();
+
+        blueprint.set(0, 5, 0, "minecraft:stone_brick_stairs[facing=east,half=bottom]");
+        blueprint.set(1, 5, 0, "minecraft:stone_brick_stairs[facing=west,half=top]");
+        assertTrue(FortressValidator.validate(blueprint, stone).valid(), "two stairs, quota two");
+
+        blueprint.set(2, 5, 0, "minecraft:stone_brick_stairs[facing=north,half=bottom]");
+        assertFalse(FortressValidator.validate(blueprint, stone).valid(),
+                "a third stair is a third stair, whichever way it points");
+    }
+
+    @Test
+    void theCrystalBaseIsCheckedByTypeNotByState() {
+        blueprint.set(5, 0, 5, "minecraft:obsidian");
+        blueprint.crystal(new BlockPos(5, 1, 5));
+
+        assertTrue(check().valid(), () -> check().problems().toString());
+    }
+
+    @Test
+    void anOrientedBlockStillFillsTheCrystalsClearance() {
+        aValidFortress();
+        blueprint.set(4, 1, 5, "minecraft:oak_stairs[facing=east,half=bottom]");
+
+        assertFalse(check().valid(), "a stair is not air, however it is turned");
+    }
+
     // --- the rules can change under a fortress that is already built ---------------
 
     @Test

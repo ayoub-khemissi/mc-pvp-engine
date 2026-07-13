@@ -1,6 +1,7 @@
 package fr.ayoub.pvp.mode.fortress.build;
 
 import fr.ayoub.pvp.api.PvPEngineApi;
+import fr.ayoub.pvp.domain.fortress.BlockIds;
 import fr.ayoub.pvp.domain.fortress.BlockPos;
 import fr.ayoub.pvp.domain.fortress.BuildReport;
 import fr.ayoub.pvp.domain.fortress.Blueprint;
@@ -167,6 +168,9 @@ public final class BuildZoneService {
                 prepareRoom(zone);
                 clearCube(zone);
                 paste(zone, blueprint);
+                if (blueprint.crystal() != null) {
+                    spawnCrystal(zone, blueprint.crystal());
+                }
 
                 sessions.put(id, new BuildSession(id, zone, slot, name, blueprint));
 
@@ -528,7 +532,14 @@ public final class BuildZoneService {
         removeCrystals(zone);
     }
 
-    /** Read the cube back out of the world, block by block, plus wherever the crystal is. */
+    /**
+     * Read the cube back out of the world, block by block, plus wherever the crystal is.
+     *
+     * The <b>whole block state</b> is kept, not just the name: which way a stair faces, which
+     * half of a door this is, whether a trapdoor is open, where a piston points. Store only
+     * the name and a pasted fortress comes out with every stair facing east and every door in
+     * two identical bottom halves.
+     */
     private Blueprint scan(BuildZone zone) {
         Blueprint blueprint = config.buildRules().emptyBlueprint();
         int size = Math.min(zone.cubeSize(), blueprint.size());
@@ -536,9 +547,9 @@ public final class BuildZoneService {
         for (int y = 0; y < size; y++) {
             for (int z = 0; z < size; z++) {
                 for (int x = 0; x < size; x++) {
-                    Material material = zone.toWorld(new BlockPos(x, y, z)).getBlock().getType();
-                    if (!material.isAir()) {
-                        blueprint.set(x, y, z, material.name());
+                    Block block = zone.toWorld(new BlockPos(x, y, z)).getBlock();
+                    if (!block.getType().isAir()) {
+                        blueprint.set(x, y, z, block.getBlockData().getAsString());
                     }
                 }
             }
@@ -554,26 +565,41 @@ public final class BuildZoneService {
         return blueprint;
     }
 
-    private void paste(BuildZone zone, Blueprint blueprint) {
+    /**
+     * Put a blueprint back into the world, states and all.
+     *
+     * A saved state may not survive a Minecraft update — a block can lose a property between
+     * versions. Rather than let one unreadable cell abort the paste and leave half a fortress
+     * standing, fall back to the plain block: a stair facing the wrong way is a nuisance, a
+     * fortress with a hole in it is a lost match.
+     */
+    public static void paste(BuildZone zone, Blueprint blueprint) {
         int size = Math.min(blueprint.size(), zone.cubeSize());
 
         for (int y = 0; y < size; y++) {
             for (int z = 0; z < size; z++) {
                 for (int x = 0; x < size; x++) {
-                    String id = blueprint.get(x, y, z);
-                    if (Blueprint.AIR.equals(id)) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    if (blueprint.isAir(pos)) {
                         continue;
                     }
-                    Material material = Material.matchMaterial(id);
-                    if (material != null) {
-                        zone.toWorld(new BlockPos(x, y, z)).getBlock().setType(material, false);
-                    }
+                    place(zone.toWorld(pos).getBlock(), blueprint.get(pos));
                 }
             }
         }
+    }
 
-        if (blueprint.crystal() != null) {
-            spawnCrystal(zone, blueprint.crystal());
+    private static void place(Block block, String state) {
+        try {
+            block.setBlockData(Bukkit.createBlockData(state), false);
+            return;
+        } catch (IllegalArgumentException e) {
+            // The state did not survive a version change. Fall through to the plain block.
+        }
+
+        Material material = Material.matchMaterial(BlockIds.typeOf(state));
+        if (material != null && material.isBlock()) {
+            block.setType(material, false);
         }
     }
 

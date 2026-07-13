@@ -1,11 +1,13 @@
 package fr.ayoub.pvp.mode.fortress.storage;
 
+import fr.ayoub.pvp.domain.fortress.Blueprint;
 import fr.ayoub.pvp.domain.fortress.BuildReport;
 import fr.ayoub.pvp.domain.fortress.BuildRules;
 import fr.ayoub.pvp.domain.fortress.FortressValidator;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -68,5 +70,32 @@ public final class FortressLibrary {
     /** The ones that may actually be taken into a match, today. */
     public List<Checked> playableFor(UUID owner) {
         return listFor(owner).stream().filter(Checked::playable).toList();
+    }
+
+    /**
+     * The blueprint a match may paste — and the <b>only</b> way to get one.
+     *
+     * This is the last gate, and it is deliberately a <i>type</i> rather than a check. The
+     * match code cannot obtain a pasteable blueprint without going through here, so it cannot
+     * forget to validate one. A check placed next to the paste can be forgotten by whoever
+     * writes the next paste; a value that only exists if it is valid cannot.
+     *
+     * It matters because time passes between queue and paste: a vote runs, a fortress is
+     * chosen, and the rules could have been reloaded in between. Validating at the queue was
+     * necessary and is not sufficient.
+     *
+     * @return empty if that slot is missing, or is not playable under today's rules
+     */
+    public Optional<Blueprint> forMatch(UUID owner, int slot) {
+        return repository.find(owner, slot)
+                .filter(fortress -> FortressValidator.validate(fortress.blueprint(), rules).valid())
+                .map(SavedFortress::blueprint);
+    }
+
+    /** The fortress a team falls back on: the owner's default, if it can still be played. */
+    public Optional<Blueprint> defaultForMatch(UUID owner) {
+        return repository.findDefault(owner)
+                .filter(fortress -> FortressValidator.validate(fortress.blueprint(), rules).valid())
+                .map(SavedFortress::blueprint);
     }
 }

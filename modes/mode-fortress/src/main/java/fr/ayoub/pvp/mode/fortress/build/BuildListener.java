@@ -9,18 +9,24 @@ import fr.ayoub.pvp.mode.fortress.menu.PaletteMenu;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
 import org.bukkit.entity.EnderCrystal;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockDispenseEvent;
+import org.bukkit.event.block.BlockMultiPlaceEvent;
+import org.bukkit.event.block.BlockPistonExtendEvent;
+import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
@@ -69,6 +75,16 @@ public final class BuildListener implements Listener {
             return;
         }
 
+        // A door is two blocks. Placed against the ceiling of the cube, its upper half lands
+        // OUTSIDE — a block nothing owns: the cube scan never sees it, and the wipe between
+        // builders never clears it. Refuse the whole placement rather than leave it behind.
+        if (event instanceof BlockMultiPlaceEvent multi
+                && multi.getReplacedBlockStates().stream()
+                        .anyMatch(state -> !zone.isInCube(state.getBlock()))) {
+            refuse(event, player, "It does not fit inside the cube.");
+            return;
+        }
+
         String id = block.getType().name();
         if (!rules.allows(id)) {
             refuse(event, player, id + " is not allowed in a fortress.");
@@ -87,9 +103,35 @@ public final class BuildListener implements Listener {
             return;
         }
 
-        blueprint.set(pos, id);
-        session.touch();
+        record(session, zone, event);
         showBudget(player, rules, blueprint, id);
+    }
+
+    /**
+     * Write what was placed into the live blueprint — <b>every block of it</b>.
+     *
+     * A door is two blocks and Minecraft fires <b>one</b> event for it. Recording only
+     * {@code getBlock()} meant the budget counter thought a door cost one door, so a player
+     * could place twice the doors the quota allows and only find out at save time, when the
+     * re-scan of the world told the truth and turned their fortress into a draft.
+     *
+     * The state goes in too, not just the name: which way it faces, which half it is.
+     */
+    private static void record(BuildSession session, BuildZone zone, BlockPlaceEvent event) {
+        Blueprint blueprint = session.blueprint();
+
+        if (event instanceof BlockMultiPlaceEvent multi) {
+            for (BlockState placed : multi.getReplacedBlockStates()) {
+                Block block = placed.getBlock();
+                if (zone.isInCube(block)) {
+                    blueprint.set(zone.toBlueprint(block), block.getBlockData().getAsString());
+                }
+            }
+        } else {
+            Block block = event.getBlock();
+            blueprint.set(zone.toBlueprint(block), block.getBlockData().getAsString());
+        }
+        session.touch();
     }
 
     /** The pocket around the crystal is refused as it is filled, not discovered at save. */
@@ -314,6 +356,62 @@ public final class BuildListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onDrop(PlayerDropItemEvent event) {
         if (zones.isBuilding(event.getPlayer())) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * A builder who leaves the build world by any route we did not drive is no longer a
+     * builder.
+     *
+     * The hole this closes: a party leader can queue while a member is in a build zone. The
+     * engine then teleports that member into a match — and their build session survived. Every
+     * rule in this class keys off the session, so the build-zone rules would have started
+     * applying to blocks they placed <b>in the arena</b>, their zone would have stayed locked
+     * for good, and they would have arrived in a match in creative.
+     *
+     * Rather than enumerate the ways out (queued by someone else, an admin teleport, a plugin,
+     * a world unload), treat the fact of leaving as the end of the session. It cannot be
+     * bypassed, because it is not a check on the way out — it is the way out.
+     */
+    @EventHandler
+    public void onChangedWorld(PlayerChangedWorldEvent event) {
+        Player player = event.getPlayer();
+
+        if (zones.world() == null || !zones.world().equals(event.getFrom())) {
+            return;   // they were not in the build world to begin with
+        }
+        if (zones.isBuilding(player) || zones.isWatching(player)) {
+            zones.abandon(player);
+        }
+    }
+
+    /**
+     * Nothing but a player may put a block in a fortress.
+     *
+     * A dispenser can place water, lava, or a boat; a piston can push a block into the
+     * crystal's clearance. Neither fires a place event, so neither passes a single check, and
+     * the save would simply record whatever they left behind. The validator would catch a
+     * forbidden block eventually — but a rule you rely on being caught downstream is a rule
+     * you have already stopped enforcing.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void onDispense(BlockDispenseEvent event) {
+        if (inBuildWorld(event.getBlock().getWorld().getName())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPistonExtend(BlockPistonExtendEvent event) {
+        if (inBuildWorld(event.getBlock().getWorld().getName())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPistonRetract(BlockPistonRetractEvent event) {
+        if (inBuildWorld(event.getBlock().getWorld().getName())) {
             event.setCancelled(true);
         }
     }
