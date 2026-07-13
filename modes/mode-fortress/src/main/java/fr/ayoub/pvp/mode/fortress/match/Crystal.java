@@ -1,5 +1,6 @@
 package fr.ayoub.pvp.mode.fortress.match;
 
+import org.bukkit.block.Block;
 import org.bukkit.entity.EnderCrystal;
 
 /**
@@ -17,19 +18,40 @@ public final class Crystal {
 
     private final int team;
     private final EnderCrystal entity;
+    private final Block base;
     private final int maxHealth;
 
     private int health;
 
-    public Crystal(int team, EnderCrystal entity, int maxHealth) {
+    public Crystal(int team, EnderCrystal entity, Block base, int maxHealth) {
         this.team = team;
         this.entity = entity;
+        this.base = base;
         this.maxHealth = maxHealth;
         this.health = maxHealth;
     }
 
     public int team() {
         return team;
+    }
+
+    /**
+     * The block it stands on.
+     *
+     * Pull that out and the crystal goes with it. Vanilla would leave it hanging in the air,
+     * which is exactly the wrong answer here: an attacker who has spent five minutes tunnelling
+     * under a fortress to reach the obsidian has earned the kill, and a crystal floating over a
+     * hole is a joke.
+     */
+    public Block base() {
+        return base;
+    }
+
+    public boolean isBase(Block block) {
+        return base.getWorld().equals(block.getWorld())
+                && base.getX() == block.getX()
+                && base.getY() == block.getY()
+                && base.getZ() == block.getZ();
     }
 
     public EnderCrystal entity() {

@@ -42,4 +42,12 @@ public final class CrystalRegistry {
     void hit(UUID entity, int damage, org.bukkit.entity.Player attacker) {
         find(entity).ifPresent(found -> found.handler().onCrystalHit(found.crystal(), damage, attacker));
     }
+
+    /** Somebody is digging out the block a crystal stands on. */
+    void baseBroken(org.bukkit.block.Block block, org.bukkit.entity.Player attacker) {
+        byEntity.values().stream()
+                .filter(entry -> entry.crystal().isBase(block))
+                .findFirst()
+                .ifPresent(entry -> entry.handler().onBaseBroken(entry.crystal(), attacker));
+    }
 }

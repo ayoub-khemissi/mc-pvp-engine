@@ -46,7 +46,7 @@ public final class FortressMapBuilder {
      * that already had version 1 maps would otherwise keep them, and its players would be
      * teleported to a voting plain that was never built.
      */
-    public static final int MAP_VERSION = 2;
+    public static final int MAP_VERSION = 3;
 
     public static final int SIZE = 128;          // the island, in blocks
     public static final int SPACING = 256;       // between two instances
@@ -57,8 +57,18 @@ public final class FortressMapBuilder {
     /** The pads sit near the two ends, facing each other along Z. */
     private static final int PAD_MARGIN = 18;
 
-    /** The voting plains float above the island, one per team, out of sight of each other. */
+    /**
+     * The voting plains: one per team, and <b>three hundred blocks apart</b>.
+     *
+     * They used to be thirty-six blocks apart, which meant a team could stand on its own plain
+     * and read the enemy's three fortresses like a menu — the entire point of a secret vote,
+     * gone. Distance is the only fix that actually works: a wall between them is no obstacle
+     * to a spectator, who flies through walls. Three hundred is comfortably past the server's
+     * view distance, so there is nothing to see, not merely something hard to see.
+     */
     public static final int VOTE_Y = 130;
+    private static final int VOTE_Z_TEAM_0 = 300;
+    private static final int VOTE_Z_TEAM_1 = 600;
     private static final int VOTE_GAP = 6;       // between two fortresses on display
     private static final int VOTE_APRON = 10;    // where the voters stand, in front of them
 
@@ -168,7 +178,7 @@ public final class FortressMapBuilder {
     }
 
     public static int votePlainZ(int oz, int team) {
-        return team == 0 ? oz + 4 : oz + 70;
+        return team == 0 ? oz + VOTE_Z_TEAM_0 : oz + VOTE_Z_TEAM_1;
     }
 
     /** Where fortress {@code slot} (0-based) is shown. */
@@ -518,9 +528,13 @@ public final class FortressMapBuilder {
             int px = padX(ox, cube);
             int pz = padZ(oz, cube, team);
 
-            // Behind your own fortress, looking down the map at the enemy's.
+            // AT YOUR GATE, not behind the fortress.
+            //
+            // You spawn on the face the enemy arrives at — your own front — with your fortress
+            // at your back and the map in front of you. Spawning behind it meant staring at a
+            // blind wall while the fight happened on the other side of it.
             double sx = px + cube / 2.0;
-            double sz = team == 0 ? pz - 6.5 : pz + cube + 6.5;
+            double sz = team == 0 ? pz + cube + 6.5 : pz - 6.5;
 
             yaml.set("spawns.team-" + team + ".x", sx);
             yaml.set("spawns.team-" + team + ".y", (double) SURFACE_Y + 1);
@@ -542,7 +556,10 @@ public final class FortressMapBuilder {
         // High enough to hold the voting plains. The engine pushes players back inside the
         // bounds, so a ceiling below them would drag a voter out of the vote.
         yaml.set("bounds.max-y", (double) CEILING_Y);
-        yaml.set("bounds.max-z", (double) oz + SIZE);
+        // Far enough to hold the voting plains. The engine pushes a player back inside the
+        // bounds, so a boundary that stopped at the island would drag a voter out of the vote.
+        // Nothing is out there but the two plains: the island itself is walled with barriers.
+        yaml.set("bounds.max-z", (double) oz + VOTE_Z_TEAM_1 + 100);
 
         File maps = new File(plugin.getDataFolder().getParentFile(), "PvPEngine/maps");
         maps.mkdirs();

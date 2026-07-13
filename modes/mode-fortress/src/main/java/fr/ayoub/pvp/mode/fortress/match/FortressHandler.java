@@ -229,10 +229,13 @@ public final class FortressHandler implements MatchHandler {
             return;
         }
 
-        // Team 1 is turned half way round: the pads face each other, and a blueprint's front
-        // is its z = 0 face. Unrotated, the second team would defend a fortress whose gate
-        // opens away from the enemy and whose blind wall takes the assault.
-        boolean turned = team == 1;
+        // Which fortress gets turned round, and it is team 0's — not team 1's.
+        //
+        // A blueprint's front is its z = 0 face, and pasting puts that face at the pad's LOW
+        // z. Team 0's pad is the one at low z, so its gate came out pointing AWAY from the
+        // enemy and its blind wall took the assault. Team 1's pad is at high z, so it was
+        // already right, and turning it made it wrong.
+        boolean turned = team == 0;
 
         Fortresses.paste(context, blueprint,
                 pad.getBlockX(), pad.getBlockY(), pad.getBlockZ(), turned);
@@ -249,13 +252,33 @@ public final class FortressHandler implements MatchHandler {
                 pad.getBlockY() + at.y(),
                 pad.getBlockZ() + at.z() + 0.5);
 
+        // Belt and braces: nothing else may be standing here. A crystal left behind by a match
+        // that died badly would sit in the same block as ours, and a player would be hitting
+        // one of two crystals with no way to tell which.
+        for (Entity leftover : context.world().getNearbyEntities(location, 2, 2, 2)) {
+            if (leftover instanceof EnderCrystal) {
+                leftover.remove();
+            }
+        }
+
         EnderCrystal entity = (EnderCrystal) context.world()
                 .spawnEntity(location, EntityType.END_CRYSTAL);
         entity.setShowingBottom(false);
 
-        Crystal crystal = new Crystal(team, entity, config.crystalHealth());
+        Crystal crystal = new Crystal(team, entity, location.getBlock().getRelative(0, -1, 0),
+                config.crystalHealth());
+
         crystals.put(team, crystal);
         registry.register(this, crystal);
+    }
+
+    /** The block it stood on is gone. So is the crystal, and so is the match. */
+    void onBaseBroken(Crystal crystal, Player attacker) {
+        if (context == null || crystal.isDead()) {
+            return;
+        }
+        crystal.damage(crystal.health());   // straight to zero
+        breakCrystal(crystal);
     }
 
     /**
@@ -312,12 +335,15 @@ public final class FortressHandler implements MatchHandler {
         crystal.entity().getWorld().playSound(crystal.entity().getLocation(),
                 broken ? Sound.ENTITY_ENDER_DRAGON_HURT : Sound.BLOCK_GLASS_BREAK, 2f, 1f);
 
-        if (!broken) {
-            return;
+        if (broken) {
+            breakCrystal(crystal);
         }
+    }
 
+    private void breakCrystal(Crystal crystal) {
         crystal.remove();
         registry.forget(crystal);
+        updateBars();
 
         int winner = 1 - crystal.team();   // whoever it did not belong to
 
@@ -404,6 +430,15 @@ public final class FortressHandler implements MatchHandler {
 
     @Override
     public void onEnd(MatchContext context, MatchOutcome outcome) {
+        // The match can die UNDER the vote — an abort, a disconnect, a shutdown. If the vote
+        // is left running it finishes anyway, thirty seconds later, and cheerfully pastes two
+        // fortresses and two crystals into a match that no longer exists, on an arena that has
+        // already been given to somebody else. That is where the duplicate crystals came from.
+        if (vote != null && !vote.isOver()) {
+            vote.abandon();
+        }
+        vote = null;
+
         if (hud != null) {
             hud.cancel();
             hud = null;

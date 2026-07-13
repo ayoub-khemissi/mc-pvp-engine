@@ -13,7 +13,24 @@ package fr.ayoub.pvp.api;
  *                         that is about building (a bridge, a wall).
  */
 public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
-                         boolean building, int respawnSeconds) {
+                         boolean building, int respawnSeconds, int setupSeconds) {
+
+    /**
+     * How long the mode may take in {@code onPrepare} before the engine gives up on it.
+     *
+     * This killed Fortress. The engine had a flat ten-second limit, and Fortress runs a
+     * thirty-second vote: the match was aborted mid-vote, the players were dumped back in the
+     * lobby — and then the vote finished anyway and pasted two fortresses and two crystals
+     * into a dead match, on an arena that had already been handed to somebody else.
+     *
+     * A limit the engine invents is a limit that is wrong for every mode but the one it was
+     * written for. The mode knows how long it needs. This is it saying so, and the engine's
+     * timeout is what it always should have been: a net under a <b>broken</b> mode, not a
+     * budget for a working one.
+     */
+    public int setupTimeoutSeconds() {
+        return setupSeconds;
+    }
 
     public MatchRules {
         if (rounds < 1 || rounds % 2 == 0) {
@@ -29,7 +46,7 @@ public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
 
     /** Best of 3, no building, no respawn — one lucky hit should not decide a ranked match. */
     public static MatchRules standard() {
-        return new MatchRules(3, 5, 300, false, 0);
+        return new MatchRules(3, 5, 300, false, 0, 10);
     }
 
     /**

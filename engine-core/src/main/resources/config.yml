@@ -42,6 +42,12 @@ modes:
     enabled: true
     order: 1
 
+# Matches.
+match:
+  # How long a disconnected player keeps their place. A dropped connection in minute
+  # twenty of a thirty-minute match should not end it.
+  rejoin-seconds: 90
+
 # Parties: playing with friends.
 #
 # A party queues as ONE ticket, so its members are never split across two teams.

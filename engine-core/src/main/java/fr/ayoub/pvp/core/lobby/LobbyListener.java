@@ -38,6 +38,16 @@ public final class LobbyListener implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
 
+        // A match may still be holding their place. Reconnecting inside the grace period puts
+        // them straight back in it — the lobby does not get to grab them on the way past and
+        // teleport them out of a game they are still in.
+        if (plugin.matches().tryRejoin(player)) {
+            Sidebar.update(plugin, player);
+            plugin.async().execute(() ->
+                    plugin.players().upsert(player.getUniqueId(), player.getName()));
+            return;
+        }
+
         lobby.send(player);
         Sidebar.update(plugin, player);
 

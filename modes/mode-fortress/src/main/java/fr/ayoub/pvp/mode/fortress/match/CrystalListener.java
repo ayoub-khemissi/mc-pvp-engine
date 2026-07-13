@@ -8,6 +8,8 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 
 /**
@@ -45,6 +47,30 @@ public final class CrystalListener implements Listener {
 
         int damage = (int) Math.max(1, Math.round(event.getDamage()));
         registry.hit(crystal.getUniqueId(), damage, attacker(event));
+    }
+
+    /**
+     * The obsidian under a crystal is part of the crystal.
+     *
+     * Vanilla would leave it hanging in the air over the hole, which is exactly the wrong
+     * answer: an attacker who has tunnelled under a fortress to reach that block has earned
+     * the kill. Blowing it up counts too — an explosion breaks the block, and the block is
+     * what the crystal is standing on.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBreak(BlockBreakEvent event) {
+        registry.baseBroken(event.getBlock(), event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlast(EntityExplodeEvent event) {
+        Player source = event.getEntity() instanceof Player player ? player : null;
+        event.blockList().forEach(block -> registry.baseBroken(block, source));
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockBlast(BlockExplodeEvent event) {
+        event.blockList().forEach(block -> registry.baseBroken(block, null));
     }
 
     /** Nothing a crystal does explodes. Not when it dies, not when it is hit. */

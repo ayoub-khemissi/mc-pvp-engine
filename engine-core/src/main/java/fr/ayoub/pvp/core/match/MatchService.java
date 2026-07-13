@@ -45,8 +45,6 @@ public final class MatchService {
     /** How long the scoreline stays on screen between two rounds. */
     private static final long ROUND_BREAK_TICKS = 60L;
 
-    /** How long a mode may take to load whatever it needs before the countdown. */
-    private static final long PREPARE_TIMEOUT_TICKS = 200L;   // 10 seconds
 
     /** Two sneaks within this delay mean "let me out", one means "go down". */
     private static final long DOUBLE_SNEAK_MILLIS = 500L;
@@ -58,6 +56,9 @@ public final class MatchService {
     private final Map<UUID, PlayerSnapshot> snapshots = new HashMap<>();
     private final Map<UUID, Match> spectating = new HashMap<>();
     private final Map<UUID, Long> lastSneak = new HashMap<>();
+
+    /** Players whose connection dropped, and the match still waiting for them. */
+    private final Map<UUID, Match> disconnected = new HashMap<>();
     private final List<Match> active = new ArrayList<>();
 
     public MatchService(PvPEnginePlugin plugin) {
@@ -164,7 +165,7 @@ public final class MatchService {
                 match.broadcast(Component.text("The match could not be set up.", NamedTextColor.RED));
                 abort(match);
             }
-        }, PREPARE_TIMEOUT_TICKS);
+        }, Math.max(1, match.mode().rules().setupTimeoutSeconds()) * 20L);
 
         match.handler().onPrepare(match, ready);
     }
@@ -398,31 +399,117 @@ public final class MatchService {
         }
     }
 
+    /**
+     * Somebody's connection dropped.
+     *
+     * They are <b>not</b> written off. A dropped connection in the twentieth minute of a
+     * thirty-minute Fortress match used to end it on the spot: the player was retired, their
+     * team was a man down for good, and if they were alone the match was simply forfeited —
+     * for a router blinking.
+     *
+     * So they are held for a grace period instead. They come out of the fight (nobody wants
+     * to be shot at while offline) but they keep their place in it, and the moment they come
+     * back they are put where they were. Only when the grace runs out are they written off,
+     * and only then does their team forfeit.
+     */
     public void handleQuit(Player player) {
         stopSpectating(player);
 
         matchOf(player).ifPresent(match -> {
-            match.removeCompletely(player.getUniqueId());
-            matchByPlayer.remove(player.getUniqueId());
-            snapshots.remove(player.getUniqueId());   // they will respawn in the lobby anyway
+            UUID id = player.getUniqueId();
 
-            match.broadcast(Component.text(player.getName() + " left the match", NamedTextColor.GRAY));
+            matchByPlayer.remove(id);
+            match.eliminate(player);        // out of the fight, not out of the match
 
-            // A team that has nobody left forfeits the whole series, not just the round.
-            List<Integer> remaining = match.teamsRemaining();
-            if (remaining.size() == 1) {
-                finish(match, MatchOutcome.win(remaining.getFirst(), MatchOutcome.Reason.FORFEIT));
-                return;
-            }
-            if (remaining.isEmpty()) {
-                abort(match);
+            if (match.state().isFinished() || !active.contains(match)) {
+                match.removeCompletely(id);
+                snapshots.remove(id);
                 return;
             }
 
-            if (match.isLive()) {
-                checkRoundOver(match);
-            }
+            disconnected.put(id, match);
+            match.broadcast(Component.text(player.getName(), NamedTextColor.YELLOW)
+                    .append(Component.text(" disconnected — " + rejoinSeconds()
+                            + "s to come back", NamedTextColor.GRAY)));
+
+            Bukkit.getScheduler().runTaskLater(plugin, () -> giveUpOn(match, id),
+                    rejoinSeconds() * 20L);
         });
+    }
+
+    /** The grace ran out. Now they are gone, and now their team can forfeit. */
+    private void giveUpOn(Match match, UUID id) {
+        if (disconnected.remove(id) == null || match.state().isFinished()) {
+            return;   // they came back, or the match is already over
+        }
+
+        match.removeCompletely(id);
+        snapshots.remove(id);
+
+        match.broadcast(Component.text("A player did not come back.", NamedTextColor.GRAY));
+
+        List<Integer> remaining = match.teamsRemaining();
+        if (remaining.size() == 1) {
+            finish(match, MatchOutcome.win(remaining.getFirst(), MatchOutcome.Reason.FORFEIT));
+            return;
+        }
+        if (remaining.isEmpty()) {
+            abort(match);
+            return;
+        }
+        if (match.isLive()) {
+            checkRoundOver(match);
+        }
+    }
+
+    /**
+     * They came back. Put them where they were.
+     *
+     * @return true if they were in a match, and are now back in it — in which case the lobby
+     *         must NOT take them, which is why this returns anything at all
+     */
+    public boolean tryRejoin(Player player) {
+        Match match = disconnected.remove(player.getUniqueId());
+
+        if (match == null || match.state().isFinished() || !active.contains(match)) {
+            snapshots.remove(player.getUniqueId());
+            return false;
+        }
+
+        Optional<Team> team = match.teamOf(player);
+        if (team.isEmpty()) {
+            return false;
+        }
+
+        matchByPlayer.put(player.getUniqueId(), match);
+        plugin.arenas().enter(player, match.arena());
+
+        match.revive(player.getUniqueId());
+
+        player.setGameMode(match.mode().rules().building() ? GameMode.SURVIVAL : GameMode.ADVENTURE);
+        player.teleport(match.spawn(team.get().index()));
+        player.setHealth(20);
+        player.setFoodLevel(20);
+        player.setFireTicks(0);
+        player.getInventory().clear();
+        player.getInventory().setArmorContents(null);
+
+        match.handler().onRespawn(match, player, team.get().index());
+
+        // Whatever they were carrying is on the ground where they dropped out — the same deal
+        // as dying. Handing it back would make disconnecting a way to protect your gear.
+        player.sendMessage(Component.text("You are back in the match.", NamedTextColor.GREEN));
+        match.broadcast(Component.text(player.getName(), NamedTextColor.GREEN)
+                .append(Component.text(" is back.", NamedTextColor.GRAY)));
+
+        if (!match.isLive()) {
+            Freeze.apply(player);   // the match has not started yet; nobody moves
+        }
+        return true;
+    }
+
+    private int rejoinSeconds() {
+        return Math.max(10, plugin.getConfig().getInt("match.rejoin-seconds", 90));
     }
 
     /** Is this round over — and if it is, is the whole match over? */
