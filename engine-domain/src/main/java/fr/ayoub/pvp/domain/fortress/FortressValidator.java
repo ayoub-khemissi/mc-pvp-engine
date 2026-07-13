@@ -26,11 +26,26 @@ public final class FortressValidator {
     public static BuildReport validate(Blueprint blueprint, BuildRules rules) {
         List<String> problems = new ArrayList<>();
 
+        checkSize(blueprint, rules, problems);
         checkCrystal(blueprint, rules, problems);
         checkPalette(blueprint, rules, problems);
         checkQuotas(blueprint, rules, problems);
 
         return problems.isEmpty() ? BuildReport.ok() : BuildReport.failed(problems);
+    }
+
+    /**
+     * The cube is a config knob, and a fortress carries the size it was built at.
+     *
+     * A 10³ build cannot be pasted into a 20³ pad — it would sit in one corner of it. It has
+     * to be rebuilt, not silently stretched, and the player has to be told so rather than
+     * find out when their fortress turns up a quarter of the size it should be.
+     */
+    private static void checkSize(Blueprint blueprint, BuildRules rules, List<String> problems) {
+        if (blueprint.size() != rules.size()) {
+            problems.add("This fortress was built at size " + blueprint.size()
+                    + "³ and the server now uses " + rules.size() + "³ — it has to be rebuilt.");
+        }
     }
 
     /**

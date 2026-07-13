@@ -3,6 +3,7 @@ package fr.ayoub.pvp.mode.fortress;
 import fr.ayoub.pvp.api.PvPEngineApi;
 import fr.ayoub.pvp.mode.fortress.build.BuildListener;
 import fr.ayoub.pvp.mode.fortress.build.BuildZoneService;
+import fr.ayoub.pvp.mode.fortress.storage.FortressLibrary;
 import fr.ayoub.pvp.mode.fortress.storage.FortressRepository;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -40,12 +41,17 @@ public final class FortressPlugin extends JavaPlugin {
         FortressRepository fortresses =
                 new FortressRepository(PvPEngineApi.storage().dataSource());
 
+        // Nothing reads the stored "playable" flag directly. The rules can change under a
+        // fortress that was saved months ago, so the library re-checks every read against
+        // the rules as they are now — and repairs the row on its way past.
+        FortressLibrary library = new FortressLibrary(fortresses, config.buildRules());
+
         BuildZoneService zones = new BuildZoneService(this, config, fortresses);
         zones.createWorld();
 
         getServer().getPluginManager().registerEvents(new BuildListener(zones, config), this);
 
-        PvPEngineApi.modes().register(new FortressMode(config, zones, fortresses));
+        PvPEngineApi.modes().register(new FortressMode(config, zones, fortresses, library));
 
         getLogger().info("Fortress ready — " + config.fortressSize() + "³ fortresses, "
                 + config.buildRules().allowance().size() + " block types, "

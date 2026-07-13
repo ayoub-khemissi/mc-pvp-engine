@@ -32,4 +32,8 @@ public record SavedFortress(
     public SavedFortress asDefault(boolean value) {
         return new SavedFortress(owner, slot, name, blueprint, playable, value);
     }
+
+    public SavedFortress asPlayable(boolean value) {
+        return new SavedFortress(owner, slot, name, blueprint, value, isDefault);
+    }
 }

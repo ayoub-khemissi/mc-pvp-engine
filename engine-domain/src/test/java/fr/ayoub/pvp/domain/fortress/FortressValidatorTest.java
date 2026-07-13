@@ -200,6 +200,71 @@ class FortressValidatorTest {
                         + report.problems());
     }
 
+    // --- the rules can change under a fortress that is already built ---------------
+
+    @Test
+    void tighteningAQuotaTurnsAValidFortressIntoADraft() {
+        // The whole reason validation cannot be a flag written once at save time. Somebody
+        // lowers the obsidian budget in config.yml, and every fortress built under the old
+        // one has to stop being playable — quietly keeping them would mean pasting a
+        // fortress that breaks the rules the match is being played under.
+        aValidFortress();
+        for (int i = 0; i < 5; i++) {
+            blueprint.set(i, 5, 0, "OBSIDIAN");   // 5 + the base = 6
+        }
+
+        assertTrue(check().valid(), "six obsidian is fine when the quota is eight");
+
+        BuildRules tightened = new BuildRules(
+                SIZE, Map.of("STONE", 200, "OBSIDIAN", 3, "OAK_PLANKS", 50),
+                "OBSIDIAN", 1, 3);
+
+        BuildReport report = FortressValidator.validate(blueprint, tightened);
+
+        assertFalse(report.valid(), "and a draft the day the quota drops to three");
+        assertTrue(mentions(report, "OBSIDIAN"));
+    }
+
+    @Test
+    void droppingABlockFromThePaletteInvalidatesWhatUsedIt() {
+        aValidFortress();
+        blueprint.set(1, 1, 1, "OAK_PLANKS");
+
+        BuildRules withoutWood = new BuildRules(
+                SIZE, Map.of("STONE", 200, "OBSIDIAN", 8), "OBSIDIAN", 1, 3);
+
+        assertFalse(FortressValidator.validate(blueprint, withoutWood).valid());
+    }
+
+    @Test
+    void aFortressBuiltAtAnotherCubeSizeCannotBePlayed() {
+        // The cube is a config knob. A fortress saved at 10³ cannot be pasted into a 20³
+        // pad — it would sit in a corner of it. It must be re-built, not silently stretched.
+        Blueprint small = new Blueprint(6);
+        small.set(2, 0, 2, "OBSIDIAN");
+        small.crystal(new BlockPos(2, 1, 2));
+
+        BuildReport report = FortressValidator.validate(small, rules);   // rules say SIZE = 10
+
+        assertFalse(report.valid());
+        assertTrue(mentions(report, "size"), report.problems().toString());
+    }
+
+    @Test
+    void relaxingTheRulesMakesADraftPlayableAgain() {
+        // It has to work both ways, or a fortress is punished forever for a rule that was
+        // since taken back.
+        aValidFortress();
+        blueprint.set(1, 1, 1, "BEDROCK");
+
+        assertFalse(check().valid());
+
+        BuildRules permissive = new BuildRules(
+                SIZE, Map.of("BEDROCK", 10, "OBSIDIAN", 8), "OBSIDIAN", 1, 3);
+
+        assertTrue(FortressValidator.validate(blueprint, permissive).valid());
+    }
+
     // --- a draft is not an error -------------------------------------------------
 
     @Test

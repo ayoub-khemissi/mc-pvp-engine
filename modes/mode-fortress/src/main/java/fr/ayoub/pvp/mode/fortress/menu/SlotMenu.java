@@ -6,8 +6,8 @@ import fr.ayoub.pvp.api.ui.Menu;
 import fr.ayoub.pvp.domain.ui.MenuLayout;
 import fr.ayoub.pvp.mode.fortress.FortressConfig;
 import fr.ayoub.pvp.mode.fortress.build.BuildZoneService;
+import fr.ayoub.pvp.mode.fortress.storage.FortressLibrary;
 import fr.ayoub.pvp.mode.fortress.storage.FortressRepository;
-import fr.ayoub.pvp.mode.fortress.storage.SavedFortress;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -23,27 +23,31 @@ import java.util.Map;
 /**
  * The player's fortress slots: what is in each, which one is the default, and the way in.
  *
- * Left-click builds. Right-click makes it the default — the one a match falls back on when
- * nobody votes. Shift-right-click empties it.
+ * Every slot is <b>re-checked against the rules as they are now</b>, not against the flag
+ * written the day it was saved — and when a fortress fails, the screen says exactly why.
+ *
+ * Left-click builds. Right-click makes it the default. Shift-right-click empties it.
  */
 public final class SlotMenu extends Menu {
 
     private final FortressConfig config;
     private final BuildZoneService zones;
     private final FortressRepository fortresses;
+    private final FortressLibrary library;
     private final Plugin plugin;
 
-    private final Map<Integer, SavedFortress> saved = new HashMap<>();
+    private final Map<Integer, FortressLibrary.Checked> saved = new HashMap<>();
     private boolean loading = true;
 
     public SlotMenu(FortressConfig config, BuildZoneService zones,
-                    FortressRepository fortresses, Menu parent) {
+                    FortressRepository fortresses, FortressLibrary library, Menu parent) {
         super(Component.text("My fortresses", NamedTextColor.LIGHT_PURPLE),
                 MenuLayout.bordered(3), parent);
         this.config = config;
         this.zones = zones;
         this.fortresses = fortresses;
-        this.plugin = zones.plugin();   // never look a plugin up by name — it can return null
+        this.library = library;
+        this.plugin = zones.plugin();
     }
 
     @Override
@@ -61,13 +65,11 @@ public final class SlotMenu extends Menu {
         }
 
         for (int slot = 1; slot <= config.slots(); slot++) {
-            SavedFortress fortress = saved.get(slot);
+            FortressLibrary.Checked checked = saved.get(slot);
             int at = layout().slotAt(slot - 1);
             int number = slot;
 
-            if (fortress == null) {
-                // Not a glass pane: in a chest GUI a pale pane reads as an empty slot, which
-                // is precisely the thing it was supposed to distinguish itself from.
+            if (checked == null) {
                 set(at, Icons.of(Material.CRAFTING_TABLE,
                                 Component.text("Slot " + slot + " — empty", NamedTextColor.YELLOW),
                                 Component.text("Click to start building.", NamedTextColor.GREEN)),
@@ -75,36 +77,51 @@ public final class SlotMenu extends Menu {
                 continue;
             }
 
-            List<Component> lore = new ArrayList<>();
-            lore.add(fortress.playable()
-                    ? Component.text("Ready to play", NamedTextColor.GREEN)
-                    : Component.text("Draft — not playable yet", NamedTextColor.YELLOW));
-            lore.add(Component.text(fortress.blockCount() + " blocks · "
-                    + fortress.size() + "³", NamedTextColor.GRAY));
-            if (fortress.isDefault()) {
-                lore.add(Component.text("★ Default", NamedTextColor.GOLD));
-            }
-            lore.add(Component.empty());
-            lore.add(Component.text("Left-click to edit", NamedTextColor.GREEN));
-            if (!fortress.isDefault()) {
-                lore.add(Component.text("Right-click to make it your default", NamedTextColor.AQUA));
-            }
-            lore.add(Component.text("Shift + right-click to delete", NamedTextColor.RED));
-
-            set(at, Icons.of(fortress.playable() ? Material.BRICKS : Material.COARSE_DIRT,
-                            Component.text(fortress.name(),
-                                    fortress.isDefault() ? NamedTextColor.GOLD : NamedTextColor.WHITE),
-                            lore.toArray(Component[]::new)),
-                    event -> {
-                        if (event.isRightClick() && event.isShiftClick()) {
-                            delete(viewer, number);
-                        } else if (event.isRightClick()) {
-                            makeDefault(viewer, number);
-                        } else {
-                            enter(viewer, number);
-                        }
-                    });
+            set(at, icon(checked), event -> {
+                if (event.isRightClick() && event.isShiftClick()) {
+                    delete(viewer, number);
+                } else if (event.isRightClick()) {
+                    makeDefault(viewer, number);
+                } else {
+                    enter(viewer, number);
+                }
+            });
         }
+    }
+
+    private org.bukkit.inventory.ItemStack icon(FortressLibrary.Checked checked) {
+        boolean isDefault = checked.fortress().isDefault();
+
+        List<Component> lore = new ArrayList<>();
+
+        if (checked.playable()) {
+            lore.add(Component.text("Ready to play", NamedTextColor.GREEN));
+        } else {
+            lore.add(Component.text("Cannot be played:", NamedTextColor.RED));
+            // Say WHY. "Not playable" with no reason is how a player ends up thinking the
+            // server is broken, when in fact they are two blocks over the obsidian budget.
+            checked.report().problems().forEach(problem ->
+                    lore.add(Component.text("  • " + problem, NamedTextColor.GRAY)));
+        }
+
+        lore.add(Component.text(checked.fortress().blockCount() + " blocks · "
+                + checked.fortress().size() + "³", NamedTextColor.DARK_GRAY));
+
+        if (isDefault) {
+            lore.add(Component.text("★ Default", NamedTextColor.GOLD));
+        }
+
+        lore.add(Component.empty());
+        lore.add(Component.text("Left-click to edit", NamedTextColor.GREEN));
+        if (!isDefault) {
+            lore.add(Component.text("Right-click to make it your default", NamedTextColor.AQUA));
+        }
+        lore.add(Component.text("Shift + right-click to delete", NamedTextColor.RED));
+
+        return Icons.of(checked.playable() ? Material.BRICKS : Material.COARSE_DIRT,
+                Component.text(checked.name(),
+                        isDefault ? NamedTextColor.GOLD : NamedTextColor.WHITE),
+                lore.toArray(Component[]::new));
     }
 
     private void enter(Player viewer, int slot) {
@@ -128,11 +145,11 @@ public final class SlotMenu extends Menu {
 
     private void load(Player viewer) {
         PvPEngineApi.storage().async().execute(() -> {
-            List<SavedFortress> found = fortresses.findAllFor(viewer.getUniqueId());
+            List<FortressLibrary.Checked> found = library.listFor(viewer.getUniqueId());
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 saved.clear();
-                found.forEach(fortress -> saved.put(fortress.slot(), fortress));
+                found.forEach(checked -> saved.put(checked.slot(), checked));
                 loading = false;
                 if (viewer.isOnline()) {
                     refresh(viewer);

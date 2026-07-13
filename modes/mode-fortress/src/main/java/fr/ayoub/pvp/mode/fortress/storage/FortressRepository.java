@@ -143,6 +143,32 @@ public final class FortressRepository {
         }
     }
 
+    /**
+     * Correct the {@code playable} flag, and nothing else.
+     *
+     * Used when the rules changed under a fortress that was already saved. Deliberately not
+     * a full save: rewriting the whole row would re-encode a blueprint nobody touched, and
+     * would drag the "first fortress becomes the default" logic into a code path that is
+     * only meant to be fixing a stale cache.
+     */
+    public void updatePlayable(UUID owner, int slot, boolean playable) {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement update = connection.prepareStatement("""
+                     UPDATE fortresses SET playable = ?, updated_at = ?
+                     WHERE owner_uuid = ? AND slot = ?
+                     """)) {
+
+            update.setBoolean(1, playable);
+            update.setTimestamp(2, Timestamp.from(Instant.now()));
+            update.setString(3, owner.toString());
+            update.setInt(4, slot);
+            update.executeUpdate();
+
+        } catch (SQLException e) {
+            throw new IllegalStateException("could not update a fortress of " + owner, e);
+        }
+    }
+
     /** Empty a slot. If it was the default, another slot inherits it. */
     public void delete(UUID owner, int slot) {
         try (Connection connection = dataSource.getConnection();

@@ -7,6 +7,7 @@ import fr.ayoub.pvp.api.MatchRules;
 import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.mode.fortress.build.BuildZoneService;
 import fr.ayoub.pvp.mode.fortress.menu.FortressMenu;
+import fr.ayoub.pvp.mode.fortress.storage.FortressLibrary;
 import fr.ayoub.pvp.mode.fortress.storage.FortressRepository;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -30,11 +31,14 @@ public final class FortressMode implements GameModeDefinition {
     private final FortressConfig config;
     private final BuildZoneService zones;
     private final FortressRepository fortresses;
+    private final FortressLibrary library;
 
-    public FortressMode(FortressConfig config, BuildZoneService zones, FortressRepository fortresses) {
+    public FortressMode(FortressConfig config, BuildZoneService zones,
+                        FortressRepository fortresses, FortressLibrary library) {
         this.config = config;
         this.zones = zones;
         this.fortresses = fortresses;
+        this.library = library;
     }
 
     @Override
@@ -102,7 +106,7 @@ public final class FortressMode implements GameModeDefinition {
     /** Fortress brings its own screen: it queues, and it sends you to the build zone. */
     @Override
     public ModeScreen screen() {
-        return player -> new FortressMenu(this, config, zones, fortresses).open(player);
+        return player -> new FortressMenu(this, config, zones, fortresses, library).open(player);
     }
 
     @Override
