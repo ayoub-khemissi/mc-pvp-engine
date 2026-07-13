@@ -26,6 +26,12 @@ build:
 #
 # A block that is not listed cannot be placed at all. Tune freely — this list is the whole
 # balance of the mode, and it is meant to be argued about.
+#
+# IMPORTANT: name the BLOCK, not the item you hold. Redstone dust is the item REDSTONE but
+# the block REDSTONE_WIRE; string is the item STRING but the block TRIPWIRE. The engine
+# checks what lands, not what you were carrying.
+#
+# A door is TWO blocks (upper and lower halves), so it costs two from its quota.
 palette:
   # Structure — cheap, weak
   OAK_PLANKS: 400
@@ -43,11 +49,45 @@ palette:
   # Expensive, slow to dig: this is the real defensive budget
   OBSIDIAN: 40
 
-  # Doors, stairs, traps
+  # Getting around
   OAK_STAIRS: 128
   STONE_BRICK_STAIRS: 128
-  OAK_DOOR: 8
+  OAK_DOOR: 16          # 2 blocks each -> 8 doors
+  IRON_DOOR: 8          # 2 blocks each -> 4 doors, and only redstone opens them
   OAK_TRAPDOOR: 16
+  IRON_TRAPDOOR: 8
   LADDER: 32
   TORCH: 32
   CHEST: 4
+
+  # --- Redstone: the wiring of a trap ---
+  REDSTONE_WIRE: 192    # the BLOCK name of redstone dust
+  REDSTONE_TORCH: 32
+  REDSTONE_BLOCK: 16
+  REPEATER: 32
+  COMPARATOR: 16
+  OBSERVER: 16
+  LEVER: 16
+  STONE_BUTTON: 16
+  STONE_PRESSURE_PLATE: 24
+  OAK_PRESSURE_PLATE: 24
+  TRIPWIRE_HOOK: 16
+  TRIPWIRE: 32          # the BLOCK name of string laid on the ground
+  TARGET: 8
+  NOTE_BLOCK: 8
+
+  # --- Redstone: the business end ---
+  PISTON: 24
+  STICKY_PISTON: 24
+  DISPENSER: 8
+  DROPPER: 8
+  HOPPER: 8
+  TNT: 12
+
+  # --- Traps that need no wiring ---
+  COBWEB: 12
+  MAGMA_BLOCK: 16
+  POINTED_DRIPSTONE: 16
+  SLIME_BLOCK: 16
+  HONEY_BLOCK: 16
+  CAMPFIRE: 8
