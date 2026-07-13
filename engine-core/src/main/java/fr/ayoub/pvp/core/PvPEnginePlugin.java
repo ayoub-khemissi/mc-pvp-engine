@@ -140,6 +140,16 @@ public final class PvPEnginePlugin extends JavaPlugin {
 
         Bukkit.getOnlinePlayers().forEach(lobbyService::send);
 
+        // A mode plugin enables AFTER us, and it may bring maps of its own — Fortress builds
+        // its island and writes a map.yml on first start. Scheduling a reload for the first
+        // tick means we see them: by then every plugin has enabled. Without this, a mode's
+        // own map is invisible until the next restart, and the mode looks broken on the very
+        // first boot.
+        Bukkit.getScheduler().runTask(this, () -> {
+            arenaService.load(ArenaLoader.loadAll(this));
+            getLogger().info("Maps loaded: " + arenaService.all().size());
+        });
+
         getLogger().info("PvP Engine enabled — " + arenaService.all().size() + " map(s).");
     }
 

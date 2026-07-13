@@ -12,6 +12,7 @@ import org.bukkit.plugin.Plugin;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -81,7 +82,42 @@ public final class ArenaLoader {
         int maxRating = yaml.getInt("rating.max", Integer.MAX_VALUE);
 
         MapDescriptor descriptor = new MapDescriptor(id, modes, minRating, maxRating);
-        return new Arena(descriptor, world, spawns, bounds);
+        return new Arena(descriptor, world, spawns, bounds, markersOf(yaml, world));
+    }
+
+    /**
+     * The 'markers' block: named points the engine carries and never interprets.
+     *
+     * <pre>
+     * markers:
+     *   fortress-pad-0: {x: .., y: .., z: ..}
+     * </pre>
+     *
+     * A mode asks for the name it knows. The engine learns nothing — which is what stops a
+     * new mode from needing a new engine, and is the vocabulary a designer's map will be
+     * imported with.
+     */
+    private static Map<String, Location> markersOf(YamlConfiguration yaml, World world) {
+        ConfigurationSection section = yaml.getConfigurationSection("markers");
+        if (section == null) {
+            return Map.of();
+        }
+
+        Map<String, Location> markers = new HashMap<>();
+        for (String name : section.getKeys(false)) {
+            ConfigurationSection at = section.getConfigurationSection(name);
+            if (at == null) {
+                continue;
+            }
+            markers.put(name, new Location(
+                    world,
+                    at.getDouble("x"),
+                    at.getDouble("y"),
+                    at.getDouble("z"),
+                    (float) at.getDouble("yaw"),
+                    (float) at.getDouble("pitch")));
+        }
+        return markers;
     }
 
     /** The 'bounds' block, flattened to a plain map so the pure parser can read it. */

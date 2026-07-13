@@ -19,6 +19,24 @@ public interface MatchHandler {
     default void onPrepare(MatchContext context) {
     }
 
+    /**
+     * The same, for a mode that has something to <b>load</b> before the match can start.
+     *
+     * Fortress has to fetch two fortresses out of the database and paste them onto the map.
+     * That cannot happen on the main thread, and it cannot happen after the countdown has
+     * started either — a fortress that appears around a player who is already fighting is
+     * worse than no fortress at all.
+     *
+     * So the engine waits: call {@code ready} when you are done, and the countdown begins
+     * then. Do not call it twice, and do not forget to call it — the engine gives you a few
+     * seconds before it gives up and aborts the match, which is the honest outcome when a
+     * mode cannot set its own game up.
+     */
+    default void onPrepare(MatchContext context, Runnable ready) {
+        onPrepare(context);
+        ready.run();
+    }
+
     /** FIGHT. Called at the start of <b>every</b> round. */
     default void onStart(MatchContext context) {
     }

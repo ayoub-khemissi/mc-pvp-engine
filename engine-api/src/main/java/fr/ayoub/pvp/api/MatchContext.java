@@ -51,6 +51,22 @@ public interface MatchContext {
 
     Location spawn(int team);
 
+    /** The map this match is on. */
+    String arenaId();
+
+    /**
+     * A named point the map declares, beyond the team spawns.
+     *
+     * The engine has no idea what these mean, and that is the point: a map says
+     * {@code markers: {fortress-pad-0: {...}}} and Fortress knows where to paste a fortress.
+     * Payload will say {@code payload-start}, and the engine will still not care.
+     *
+     * This is also the vocabulary a designer's map will be imported with — the point of a
+     * marker is that it carries a <b>name and a position</b>, which a block on the floor
+     * cannot.
+     */
+    Optional<Location> marker(String name);
+
     void broadcast(Component message);
 
     void title(Component title, Component subtitle);

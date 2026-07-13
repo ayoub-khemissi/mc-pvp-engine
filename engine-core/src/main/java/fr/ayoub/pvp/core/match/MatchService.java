@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Runs matches: teleport in, freeze, 3·2·1, fight, decide the round, and either play the
@@ -41,6 +42,9 @@ public final class MatchService {
 
     /** How long the scoreline stays on screen between two rounds. */
     private static final long ROUND_BREAK_TICKS = 60L;
+
+    /** How long a mode may take to load whatever it needs before the countdown. */
+    private static final long PREPARE_TIMEOUT_TICKS = 200L;   // 10 seconds
 
     /** Two sneaks within this delay mean "let me out", one means "go down". */
     private static final long DOUBLE_SNEAK_MILLIS = 500L;
@@ -114,8 +118,40 @@ public final class MatchService {
         }
 
         setUpRound(match);
-        match.handler().onPrepare(match);
-        countdown(match);
+        waitForMode(match);
+    }
+
+    /**
+     * Give the mode a chance to set its game up before the countdown starts.
+     *
+     * Fortress has two fortresses to fetch from the database and paste onto the map. That
+     * cannot happen on the main thread — and it must not happen <b>after</b> the countdown,
+     * because a fortress that materialises around a player who is already fighting is worse
+     * than no fortress at all.
+     *
+     * If the mode never says it is ready, the match is aborted rather than left frozen with
+     * players standing in an arena forever. A mode that cannot set its own game up has not
+     * produced a match, and pretending otherwise only hides the bug.
+     */
+    private void waitForMode(Match match) {
+        AtomicBoolean started = new AtomicBoolean();
+
+        Runnable ready = () -> {
+            if (started.compareAndSet(false, true) && match.isState(MatchState.PREPARING)) {
+                countdown(match);
+            }
+        };
+
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (started.compareAndSet(false, true) && match.isState(MatchState.PREPARING)) {
+                plugin.getLogger().severe("Mode '" + match.mode().id()
+                        + "' never finished preparing — aborting the match.");
+                match.broadcast(Component.text("The match could not be set up.", NamedTextColor.RED));
+                abort(match);
+            }
+        }, PREPARE_TIMEOUT_TICKS);
+
+        match.handler().onPrepare(match, ready);
     }
 
     /**

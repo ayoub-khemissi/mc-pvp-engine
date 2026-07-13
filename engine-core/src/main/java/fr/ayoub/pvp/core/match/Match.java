@@ -209,6 +209,16 @@ public final class Match implements MatchContext {
     }
 
     @Override
+    public String arenaId() {
+        return arena.id();
+    }
+
+    @Override
+    public Optional<Location> marker(String name) {
+        return arena.marker(name);
+    }
+
+    @Override
     public void broadcast(Component message) {
         onlinePlayers().forEach(player -> player.sendMessage(message));
     }

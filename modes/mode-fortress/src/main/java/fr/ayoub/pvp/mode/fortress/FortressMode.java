@@ -6,6 +6,7 @@ import fr.ayoub.pvp.api.MatchHandler;
 import fr.ayoub.pvp.api.MatchRules;
 import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.mode.fortress.build.BuildZoneService;
+import fr.ayoub.pvp.mode.fortress.match.FortressHandler;
 import fr.ayoub.pvp.mode.fortress.menu.FortressMenu;
 import fr.ayoub.pvp.mode.fortress.storage.FortressLibrary;
 import fr.ayoub.pvp.mode.fortress.storage.FortressRepository;
@@ -111,17 +112,6 @@ public final class FortressMode implements GameModeDefinition {
 
     @Override
     public MatchHandler createHandler() {
-        return new MatchHandler() {
-            @Override
-            public void giveKit(MatchContext context, Player player, int team) {
-                // The starter kit: stone tools and some food. Everything else is mined,
-                // looted, or taken off the body of whoever you just killed.
-                player.getInventory().addItem(
-                        new ItemStack(Material.STONE_PICKAXE),
-                        new ItemStack(Material.STONE_AXE),
-                        new ItemStack(Material.STONE_SHOVEL),
-                        new ItemStack(Material.COOKED_BEEF, 16));
-            }
-        };
+        return new FortressHandler(zones.plugin(), library);
     }
 }

@@ -14,18 +14,34 @@ import org.bukkit.entity.Projectile;
 import org.bukkit.entity.TNTPrimed;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * A playable area: where each team spawns, the invisible wall around it, and what it
  * is for ({@link MapDescriptor}: which modes, which rating band).
  */
-public record Arena(MapDescriptor descriptor, World world, List<Location> spawns, Region bounds) {
+public record Arena(MapDescriptor descriptor, World world, List<Location> spawns,
+                    Region bounds, Map<String, Location> markers) {
 
     /** How far outside the bounds litter still counts as ours (an arrow in the wall). */
     private static final double LITTER_MARGIN = 3.0;
 
     public Arena {
         spawns = List.copyOf(spawns);
+        markers = Map.copyOf(markers);
+    }
+
+    /**
+     * A point the map named, which the engine does not understand.
+     *
+     * "fortress-pad-0", "payload-start". The engine carries them and hands them to whichever
+     * mode asked — it never learns what they mean, which is exactly why a new mode does not
+     * need a new engine.
+     */
+    public Optional<Location> marker(String name) {
+        Location at = markers.get(name);
+        return Optional.ofNullable(at == null ? null : at.clone());
     }
 
     public String id() {
