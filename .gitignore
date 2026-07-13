@@ -1,7 +1,15 @@
 .gradle/
-build/
-*/build/
-*/*/build/
+
+# Gradle output. These patterns are ANCHORED on purpose.
+#
+# A bare "build/" matches a directory called "build" at ANY depth — including a Java package
+# called build, which is exactly what mode-fortress has. It silently ate eight source files:
+# every commit went green, the tests passed locally, and the code simply did not exist on
+# the remote. Anchor these, and a package can never be mistaken for a build directory again.
+/build/
+/*/build/
+/*/*/build/
+
 dist/
 run/
 run-data/
