@@ -25,6 +25,12 @@ public final class DuelMode implements GameModeDefinition {
         return Component.text("Duel", NamedTextColor.GOLD);
     }
 
+    /** The first entry of the menu — the mode everything else is measured against. */
+    @Override
+    public int order() {
+        return 1;
+    }
+
     @Override
     public ItemStack icon() {
         ItemStack icon = new ItemStack(Material.DIAMOND_SWORD);

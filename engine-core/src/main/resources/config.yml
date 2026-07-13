@@ -26,6 +26,22 @@ world:
   # You can always rebuild it by hand with:  /pvpadmin setup <N>
   auto-setup-arenas: 4
 
+# Game modes.
+#
+# A mode is its own plugin: it appears here as soon as its jar is in plugins/.
+# Everything below is OPTIONAL — a mode nobody configured is enabled, at the rank it
+# declares in its own code.
+#
+#   enabled: false  → installed, but gone from the Play menu, and impossible to queue for.
+#   order:          → where it sits in the menu. Lower comes first.
+#
+# The rank is a position, not an index: switching duel off does not renumber anything,
+# fortress simply becomes the first entry left.
+modes:
+  duel:
+    enabled: true
+    order: 1
+
 # Parties: playing with friends.
 #
 # A party queues as ONE ticket, so its members are never split across two teams.

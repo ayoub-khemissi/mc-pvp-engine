@@ -26,6 +26,20 @@ public interface GameModeDefinition {
 
     Component displayName();
 
+    /**
+     * Where this mode sits in the Play menu: duel asks for 1, fortress for 2, payload for 3.
+     *
+     * A <b>declared</b> rank, not a list index. Turning duel off does not renumber anybody
+     * — fortress simply becomes the first entry left, and duel goes back to the top when it
+     * is turned on again. Without this the menu would follow plugin load order, which is
+     * alphabetical, and would reshuffle itself the day a jar is renamed.
+     *
+     * The server owner can override it in config.yml (<code>modes.&lt;id&gt;.order</code>).
+     */
+    default int order() {
+        return 100;
+    }
+
     /** Shown in the "Play" menu. */
     ItemStack icon();
 

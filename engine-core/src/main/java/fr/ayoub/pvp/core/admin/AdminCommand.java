@@ -5,6 +5,7 @@ import fr.ayoub.pvp.core.arena.Arena;
 import fr.ayoub.pvp.core.arena.ArenaLoader;
 import fr.ayoub.pvp.core.arena.ArenaService;
 import fr.ayoub.pvp.core.world.WorldSetup;
+import fr.ayoub.pvp.domain.mode.ModeSlot;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -51,9 +52,50 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
             }
             case "setup" -> setup(sender, args);
             case "arena" -> arena(sender, args);
+            case "mode" -> mode(sender, args);
             default -> usage(sender);
         }
         return true;
+    }
+
+    /**
+     * Turn a game mode on or off without a restart — it appears in, or disappears from,
+     * the compass menu straight away.
+     *
+     * Not persisted on purpose: config.yml is the source of truth, this is for testing.
+     */
+    private void mode(CommandSender sender, String[] args) {
+        if (args.length < 2 || args[1].equalsIgnoreCase("list")) {
+            List<ModeSlot> installed = plugin.modes().installed();
+            if (installed.isEmpty()) {
+                send(sender, "No game mode installed. Drop a mode jar in plugins/.", NamedTextColor.YELLOW);
+                return;
+            }
+            send(sender, "Game modes, in menu order:", NamedTextColor.GOLD);
+            for (ModeSlot slot : installed) {
+                send(sender, " " + slot.order() + ". " + slot.id()
+                                + (slot.enabled() ? "  [on]" : "  [off]"),
+                        slot.enabled() ? NamedTextColor.GREEN : NamedTextColor.DARK_GRAY);
+            }
+            return;
+        }
+
+        boolean enable = args[1].equalsIgnoreCase("enable");
+        if (!enable && !args[1].equalsIgnoreCase("disable")) {
+            send(sender, "Usage: /pvpadmin mode list | enable <id> | disable <id>", NamedTextColor.RED);
+            return;
+        }
+        if (args.length < 3) {
+            send(sender, "Usage: /pvpadmin mode " + args[1] + " <id>", NamedTextColor.RED);
+            return;
+        }
+
+        if (!plugin.modes().setEnabled(args[2], enable)) {
+            send(sender, "No mode called '" + args[2] + "'.", NamedTextColor.RED);
+            return;
+        }
+        send(sender, "Mode '" + args[2] + "' is now " + (enable ? "enabled" : "disabled")
+                + ". (config.yml still decides on restart.)", NamedTextColor.GREEN);
     }
 
     /**
@@ -154,8 +196,8 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
     }
 
     private void usage(CommandSender sender) {
-        send(sender, "/pvpadmin setup [arenas] | arena list | arena tp <id> | arena leave | reload",
-                NamedTextColor.YELLOW);
+        send(sender, "/pvpadmin setup [arenas] | arena list | arena tp <id> | arena leave "
+                + "| mode list | mode enable|disable <id> | reload", NamedTextColor.YELLOW);
     }
 
     private void send(CommandSender sender, String message, NamedTextColor color) {
@@ -169,13 +211,20 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             out.add("setup");
             out.add("arena");
+            out.add("mode");
             out.add("reload");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("arena")) {
             out.add("list");
             out.add("tp");
             out.add("leave");
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("mode")) {
+            out.add("list");
+            out.add("enable");
+            out.add("disable");
         } else if (args.length == 3 && args[1].equalsIgnoreCase("tp")) {
             arenas.all().forEach(arena -> out.add(arena.id()));
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("mode")) {
+            plugin.modes().installed().forEach(slot -> out.add(slot.id()));
         }
         return out;
     }

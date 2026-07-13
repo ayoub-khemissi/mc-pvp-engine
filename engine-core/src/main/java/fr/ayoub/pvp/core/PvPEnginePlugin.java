@@ -102,7 +102,7 @@ public final class PvPEnginePlugin extends JavaPlugin {
         hotbarItems = new HotbarItems(this);
         lobbyService = new LobbyService(readLobbySpawn(), hotbarItems, arenaService);
 
-        gameModeRegistry = new GameModeRegistry(getLogger());
+        gameModeRegistry = new GameModeRegistry(getLogger(), getConfig().getConfigurationSection("modes"));
         PvPEngineApi.init(gameModeRegistry);   // mode plugins can now register
 
         matchService = new MatchService(this);
