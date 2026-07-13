@@ -2,8 +2,8 @@ package fr.ayoub.pvp.core.menu;
 
 import fr.ayoub.pvp.api.GameModeDefinition;
 import fr.ayoub.pvp.core.PvPEnginePlugin;
-import fr.ayoub.pvp.core.ui.Icons;
-import fr.ayoub.pvp.core.ui.Menu;
+import fr.ayoub.pvp.api.ui.Icons;
+import fr.ayoub.pvp.api.ui.Menu;
 import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.domain.party.Party;
 import fr.ayoub.pvp.domain.ui.MenuLayout;

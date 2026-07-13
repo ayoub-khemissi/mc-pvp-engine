@@ -5,6 +5,7 @@ import fr.ayoub.pvp.core.admin.AdminCommand;
 import fr.ayoub.pvp.core.arena.ArenaLoader;
 import fr.ayoub.pvp.core.arena.ArenaService;
 import fr.ayoub.pvp.core.arena.WallListener;
+import fr.ayoub.pvp.core.lobby.CoreLobby;
 import fr.ayoub.pvp.core.lobby.HotbarItems;
 import fr.ayoub.pvp.core.lobby.LobbyListener;
 import fr.ayoub.pvp.core.lobby.LobbyService;
@@ -105,9 +106,16 @@ public final class PvPEnginePlugin extends JavaPlugin {
 
         gameModeRegistry = new GameModeRegistry(getLogger(), getConfig().getConfigurationSection("modes"));
 
-        // Mode plugins can now register — and reach the database, for the ones that have
-        // something to remember. A mode owns its own tables; the engine never grows one.
-        PvPEngineApi.init(gameModeRegistry, new CoreStorage(dataSource, asyncExecutor));
+        // Mode plugins can now register — and reach the database (for the ones with something
+        // to remember) and the queues (for the ones with a screen of their own). A mode owns
+        // its tables and its menus; the engine never grows either.
+        //
+        // The lobby handle resolves its services lazily, so it is safe to hand out here:
+        // mode plugins only enable once this method has returned.
+        PvPEngineApi.init(
+                gameModeRegistry,
+                new CoreStorage(dataSource, asyncExecutor),
+                new CoreLobby(this));
 
         matchService = new MatchService(this);
         queueService = new QueueService(this);

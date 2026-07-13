@@ -1,4 +1,4 @@
-package fr.ayoub.pvp.core.ui;
+package fr.ayoub.pvp.api.ui;
 
 import fr.ayoub.pvp.domain.ui.MenuLayout;
 import net.kyori.adventure.text.Component;
@@ -21,6 +21,11 @@ import java.util.function.Consumer;
  *
  * The engine's whole "no commands" UX is built on this: the player clicks items, never
  * types. Geometry and pagination come from {@link MenuLayout} (unit-tested).
+ *
+ * <p>This lives in the <b>SPI</b>, not in the engine, on purpose: a game mode with a screen
+ * of its own — Fortress has a build zone to reach — must be able to build one without the
+ * engine knowing that mode exists. Extend it in your mode plugin and the engine's listener
+ * routes the clicks for you.
  *
  * Three things every screen gets for free, so no menu has to reinvent them:
  * <ul>
@@ -160,8 +165,13 @@ public abstract class Menu implements InventoryHolder {
         return layout;
     }
 
-    /** Called by {@link MenuListener}. Never let the player take items out. */
-    void handleClick(InventoryClickEvent event) {
+    /**
+     * Called by the engine's menu listener — <b>not</b> by a mode.
+     *
+     * Public only because the listener lives in another package. Never let the player take
+     * items out.
+     */
+    public void handleClick(InventoryClickEvent event) {
         event.setCancelled(true);
 
         Consumer<InventoryClickEvent> handler = handlers.get(event.getRawSlot());

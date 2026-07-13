@@ -1,6 +1,6 @@
 package fr.ayoub.pvp.core.lobby;
 
-import fr.ayoub.pvp.core.ui.Icons;
+import fr.ayoub.pvp.api.ui.Icons;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;

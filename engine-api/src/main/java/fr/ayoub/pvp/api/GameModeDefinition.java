@@ -46,6 +46,27 @@ public interface GameModeDefinition {
     /** Which formats can be queued: 1v1, 2v2, … */
     List<Format> formats();
 
+    /**
+     * The screen the compass opens for this mode.
+     *
+     * Return {@code null} — the default — and the engine shows its own: the list of formats,
+     * click one, you are queued. That is all Duel will ever need.
+     *
+     * A mode with more to offer returns its own {@link fr.ayoub.pvp.api.ui.Menu}: Fortress
+     * queues <i>and</i> sends you to a build zone, so it puts up a screen the engine could
+     * not have guessed. The engine still knows nothing about it — it just opens what it is
+     * handed, and {@link PvPEngineApi#lobby()} is how that screen queues people back.
+     */
+    default ModeScreen screen() {
+        return null;
+    }
+
+    /** What the compass opens for a mode that has its own screen. */
+    @FunctionalInterface
+    interface ModeScreen {
+        void open(org.bukkit.entity.Player player);
+    }
+
     /** Does a win change the players' rating? */
     boolean ranked();
 

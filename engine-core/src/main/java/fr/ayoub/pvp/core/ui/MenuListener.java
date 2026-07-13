@@ -1,5 +1,6 @@
 package fr.ayoub.pvp.core.ui;
 
+import fr.ayoub.pvp.api.ui.Menu;
 import fr.ayoub.pvp.core.PvPEnginePlugin;
 import fr.ayoub.pvp.core.menu.Menus;
 import org.bukkit.entity.Player;

@@ -1,8 +1,8 @@
 package fr.ayoub.pvp.core.menu;
 
 import fr.ayoub.pvp.core.PvPEnginePlugin;
-import fr.ayoub.pvp.core.ui.Icons;
-import fr.ayoub.pvp.core.ui.Menu;
+import fr.ayoub.pvp.api.ui.Icons;
+import fr.ayoub.pvp.api.ui.Menu;
 import fr.ayoub.pvp.domain.ui.MenuLayout;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;

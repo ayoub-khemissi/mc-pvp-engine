@@ -1,0 +1,53 @@
+# Fortress — every number here is an experiment. Nothing is hard-coded in the code.
+
+fortress:
+  # The buildable cube. Change it and old fortresses still load: the size travels with
+  # the saved data.
+  size: 20
+
+  # How many fortresses a player may keep. One of them is the default.
+  slots: 3
+
+  # The Power Crystal must stand on this block, and keep a pocket of air around itself —
+  # that pocket is what stops a fortress from being a solid cube of obsidian.
+  crystal:
+    base: OBSIDIAN
+    clearance-radius: 1     # 1 -> a 3x3 footprint, 2 -> 5x5
+    clearance-height: 3     # blocks of headroom above the base
+
+# The build zone: one instance per builder, in its own void world.
+build:
+  world: fortress_build
+  size: 50                  # a 50x50x50 room around the cube
+  spacing: 128              # distance between two builders' zones
+  instances: 8              # how many people can build at the same time
+
+# What may be placed, and how many of each.
+#
+# A block that is not listed cannot be placed at all. Tune freely — this list is the whole
+# balance of the mode, and it is meant to be argued about.
+palette:
+  # Structure — cheap, weak
+  OAK_PLANKS: 400
+  OAK_LOG: 200
+  COBBLESTONE: 500
+  STONE_BRICKS: 400
+  DIRT: 200
+  GLASS: 100
+
+  # Structure — solid
+  STONE: 400
+  DEEPSLATE_BRICKS: 250
+  IRON_BARS: 80
+
+  # Expensive, slow to dig: this is the real defensive budget
+  OBSIDIAN: 40
+
+  # Doors, stairs, traps
+  OAK_STAIRS: 128
+  STONE_BRICK_STAIRS: 128
+  OAK_DOOR: 8
+  OAK_TRAPDOOR: 16
+  LADDER: 32
+  TORCH: 32
+  CHEST: 4

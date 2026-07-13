@@ -1,4 +1,4 @@
-package fr.ayoub.pvp.core.ui;
+package fr.ayoub.pvp.api.ui;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;

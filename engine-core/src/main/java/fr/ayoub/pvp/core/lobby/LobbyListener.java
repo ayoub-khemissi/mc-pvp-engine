@@ -2,7 +2,7 @@ package fr.ayoub.pvp.core.lobby;
 
 import fr.ayoub.pvp.core.PvPEnginePlugin;
 import fr.ayoub.pvp.core.menu.Menus;
-import fr.ayoub.pvp.core.ui.Menu;
+import fr.ayoub.pvp.api.ui.Menu;
 import fr.ayoub.pvp.core.ui.Sidebar;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;

@@ -2,8 +2,8 @@ package fr.ayoub.pvp.core.menu;
 
 import fr.ayoub.pvp.api.GameModeDefinition;
 import fr.ayoub.pvp.core.PvPEnginePlugin;
-import fr.ayoub.pvp.core.ui.Icons;
-import fr.ayoub.pvp.core.ui.Menu;
+import fr.ayoub.pvp.api.ui.Icons;
+import fr.ayoub.pvp.api.ui.Menu;
 import fr.ayoub.pvp.domain.ui.MenuLayout;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -37,8 +37,17 @@ public final class PlayMenu extends Menu {
         for (int i = 0; i < shown.size(); i++) {
             GameModeDefinition mode = shown.get(i);
 
-            set(layout().slotAt(i), mode.icon(), event ->
-                    new FormatMenu(plugin, mode, this).open(viewer));
+            // A mode may bring its own screen — Fortress queues AND sends you to a build
+            // zone. The engine opens whatever it is handed; it never learns what is on it.
+            GameModeDefinition.ModeScreen screen = mode.screen();
+
+            set(layout().slotAt(i), mode.icon(), event -> {
+                if (screen != null) {
+                    screen.open(viewer);
+                } else {
+                    new FormatMenu(plugin, mode, this).open(viewer);
+                }
+            });
         }
 
         paginate(viewer, modes.size());
