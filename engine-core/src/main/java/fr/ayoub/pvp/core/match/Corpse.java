@@ -12,7 +12,10 @@ import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
+import org.bukkit.potion.PotionEffect;
+
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -67,9 +70,11 @@ public final class Corpse {
     private final ItemStack[] carried;
     private final int heldSlot;
     private final int food;
+    private final int level;
+    private final float progress;
 
     private Corpse(UUID owner, String name, Match match, int team, Mannequin body,
-                   ItemStack[] carried, int heldSlot, int food) {
+                   ItemStack[] carried, int heldSlot, int food, int level, float progress) {
         this.owner = owner;
         this.name = name;
         this.match = match;
@@ -78,6 +83,8 @@ public final class Corpse {
         this.carried = carried;
         this.heldSlot = heldSlot;
         this.food = food;
+        this.level = level;
+        this.progress = progress;
     }
 
     /**
@@ -91,10 +98,18 @@ public final class Corpse {
         Location where = player.getLocation();
         PlayerInventory inventory = player.getInventory();
 
-        ItemStack[] carried = inventory.getContents().clone();
+        ItemStack[] carried = copyOf(inventory.getContents());
         int heldSlot = inventory.getHeldItemSlot();
         int food = player.getFoodLevel();
         double health = player.getHealth();
+
+        // Whatever they had running. A player who logs out under Resistance II has a body that
+        // is under Resistance II — otherwise the body dies to blows that would not have killed
+        // THEM, and the enemy gets a kill the fight would not have given them.
+        Collection<PotionEffect> effects = List.copyOf(player.getActivePotionEffects());
+
+        int level = player.getLevel();
+        float progress = player.getExp();
 
         Mannequin body = where.getWorld().spawn(where, Mannequin.class, spawned -> {
             spawned.setProfile(ResolvableProfile.resolvableProfile(player.getPlayerProfile()));
@@ -119,13 +134,36 @@ public final class Corpse {
                         .setBaseValue(player.getAttribute(Attribute.MAX_HEALTH).getValue());
             }
             spawned.setHealth(Math.max(0.5, health));
+            effects.forEach(spawned::addPotionEffect);
         });
 
         inventory.clear();
         inventory.setArmorContents(null);
 
         return new Corpse(player.getUniqueId(), player.getName(), match, team, body,
-                carried, heldSlot, food);
+                carried, heldSlot, food, level, progress);
+    }
+
+    /**
+     * A DEEP copy, and it matters.
+     *
+     * <p>{@code getContents()} does not hand back copies. It hands back {@code CraftItemStack}
+     * <b>mirrors</b>, each one backed by the live NMS stack sitting in the player's inventory —
+     * and the very next thing this class does is empty that inventory. It happens to survive,
+     * because clearing a slot swaps the reference rather than blanking the object behind it, but
+     * that is CraftBukkit's implementation detail and not a promise anyone made us. Holding a
+     * player's entire inventory on the strength of it is not a bet worth taking.
+     *
+     * <p>{@link ItemStack#clone()} carries <b>everything</b> the stack is: the amount, the
+     * damage, the enchantments, the custom name, the components. What comes back is what they
+     * had, to the last point of durability.
+     */
+    private static ItemStack[] copyOf(ItemStack[] items) {
+        ItemStack[] copy = new ItemStack[items.length];
+        for (int slot = 0; slot < items.length; slot++) {
+            copy[slot] = items[slot] == null ? null : items[slot].clone();
+        }
+        return copy;
     }
 
     /**
@@ -163,6 +201,8 @@ public final class Corpse {
 
         player.teleport(at);
         player.setFoodLevel(food);
+        player.setLevel(level);
+        player.setExp(progress);
 
         // What they had, then what the body has now on top of it.
         player.getInventory().setContents(carried);
@@ -170,6 +210,12 @@ public final class Corpse {
 
         if (body.isValid()) {
             EntityEquipment worn = body.getEquipment();
+
+            // What the body has left of them, effects included: a Strength that ran out while
+            // they were away has run out.
+            player.getActivePotionEffects().forEach(effect ->
+                    player.removePotionEffect(effect.getType()));
+            body.getActivePotionEffects().forEach(player::addPotionEffect);
 
             player.getInventory().setHelmet(worn.getHelmet());
             player.getInventory().setChestplate(worn.getChestplate());
