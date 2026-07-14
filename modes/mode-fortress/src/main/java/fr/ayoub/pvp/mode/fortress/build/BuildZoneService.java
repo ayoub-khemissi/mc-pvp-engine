@@ -81,6 +81,7 @@ public final class BuildZoneService {
     public void createWorld() {
         world = Bukkit.getWorld(config.buildWorld());
         if (world != null) {
+            tune();
             return;
         }
 
@@ -101,6 +102,23 @@ public final class BuildZoneService {
         world.setGameRule(org.bukkit.GameRule.DO_MOB_SPAWNING, false);
         world.setGameRule(org.bukkit.GameRule.DO_TILE_DROPS, false);   // creative, but tidy
         world.setTime(6000);
+        tune();
+    }
+
+    /**
+     * A build room is a 50-block cube in the void, and there are eight of them scattered
+     * across this world. At the server's default view-distance every builder would force
+     * hundreds of chunks of nothing to load, and they would load their neighbours' rooms
+     * too — which is exactly what the rooms are spaced out to prevent.
+     *
+     * The engine tunes the worlds it owns; this one belongs to the mode, so the mode tunes it.
+     */
+    private void tune() {
+        int view = Math.max(1, config.buildViewDistance());
+
+        world.setViewDistance(view);
+        world.setSendViewDistance(view);
+        world.setSimulationDistance(view);
     }
 
     public World world() {

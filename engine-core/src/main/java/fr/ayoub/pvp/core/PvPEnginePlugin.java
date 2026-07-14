@@ -20,6 +20,7 @@ import fr.ayoub.pvp.core.ui.MenuListener;
 import fr.ayoub.pvp.core.ui.Sidebar;
 import fr.ayoub.pvp.core.world.VoidChunkGenerator;
 import fr.ayoub.pvp.core.world.WorldSetup;
+import fr.ayoub.pvp.core.world.WorldTuning;
 import fr.ayoub.pvp.storage.DataSourceFactory;
 import fr.ayoub.pvp.storage.DatabaseConfig;
 import fr.ayoub.pvp.storage.MigrationRunner;
@@ -36,6 +37,8 @@ import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import javax.sql.DataSource;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -150,6 +153,11 @@ public final class PvPEnginePlugin extends JavaPlugin {
         Bukkit.getScheduler().runTask(this, () -> {
             arenaService.load(ArenaLoader.loadAll(this));
             getLogger().info("Maps loaded: " + arenaService.all().size());
+
+            // Now that every world exists — ours and every mode's — pull the one lever that
+            // decides whether a hundred matches fit on this box: how far each of them is
+            // rendered. See WorldTuning.
+            WorldTuning.apply(this, lobbyService.spawn().getWorld(), arenaService.all());
         });
 
         getLogger().info("PvP Engine enabled — " + arenaService.all().size() + " map(s).");

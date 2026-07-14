@@ -26,6 +26,24 @@ world:
   # You can always rebuild it by hand with:  /pvpadmin setup <N>
   auto-setup-arenas: 4
 
+  # HOW FAR AN ARENA IS RENDERED AND TICKED. The most expensive number in this file.
+  #
+  # Every player forces the chunks around them to LOAD. At the server's default view-distance
+  # of 10, that is 21 x 21 = 441 chunks PER PLAYER — to render a duel arena that is 9 chunks
+  # big and walled in on every side. Multiply by a hundred matches and the server is holding
+  # tens of thousands of chunks nobody will ever see.
+  #
+  # A duel arena is 48 blocks across = 3 chunks. view-distance 5 (80 blocks) covers it with
+  # room to spare. Nothing about the game changes: the player already could not see past the
+  # barrier wall. What changes is that the same hundred matches cost a fraction of the memory.
+  #
+  # Raise it if a mode has a bigger map (Fortress islands are 128 blocks = 8 chunks).
+  # Set to 0 to leave the server's own settings alone.
+  view-distance: 5
+  # How far the world is actually TICKED (mobs, redstone, block updates). Never above
+  # view-distance — you would be ticking what nobody can see.
+  simulation-distance: 4
+
 # Game modes.
 #
 # A mode is its own plugin: it appears here as soon as its jar is in plugins/.

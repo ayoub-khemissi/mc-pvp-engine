@@ -46,7 +46,7 @@ public final class FortressMapBuilder {
      * that already had version 1 maps would otherwise keep them, and its players would be
      * teleported to a voting plain that was never built.
      */
-    public static final int MAP_VERSION = 4;
+    public static final int MAP_VERSION = 5;
 
     public static final int SIZE = 128;          // the island, in blocks
     public static final int SPACING = 256;       // between two instances
@@ -535,6 +535,17 @@ public final class FortressMapBuilder {
         yaml.set("world", world.getName());
         yaml.set("modes", List.of("fortress"));
         yaml.set("fortress-map-version", MAP_VERSION);
+
+        // How far this map has to be RENDERED. The engine defaults to something small,
+        // because a duel arena is 48 blocks wide and rendering the void around it is waste
+        // multiplied by the number of concurrent matches. An island is 128 blocks across,
+        // and a player standing at their own gate must be able to SEE the enemy fortress —
+        // at the engine's default they would be staring at fog where the target should be.
+        //
+        // 8 chunks covers the island, +2 so the far wall is not on the edge of the fog.
+        yaml.set("view-distance", 10);
+        // Redstone traps only need to tick when somebody is close enough to trip them.
+        yaml.set("simulation-distance", 6);
 
         for (int team = 0; team < 2; team++) {
             int px = padX(ox, cube);

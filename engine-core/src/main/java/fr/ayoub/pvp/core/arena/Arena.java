@@ -22,10 +22,27 @@ import java.util.Optional;
  * is for ({@link MapDescriptor}: which modes, which rating band).
  */
 public record Arena(MapDescriptor descriptor, World world, List<Location> spawns,
-                    Region bounds, Map<String, Location> markers) {
+                    Region bounds, Map<String, Location> markers, Render render) {
 
     /** How far outside the bounds litter still counts as ours (an arrow in the wall). */
     private static final double LITTER_MARGIN = 3.0;
+
+    /**
+     * How far this map has to be rendered and ticked, in chunks. 0 = "whatever the engine
+     * defaults to".
+     *
+     * <p>The map is the only thing that knows. A duel arena is 48 blocks wide and walled in:
+     * rendering 300 blocks of void around it is pure waste, and waste multiplied by the
+     * number of concurrent matches is what decides how many fit on the box. A Fortress island
+     * is 128 blocks, and a player standing at their own gate must be able to SEE the enemy
+     * fortress — render it short and they get fog where the target should be.
+     *
+     * <p>So the number lives in {@code map.yml}, written by whoever built the map. The engine
+     * takes the largest one per world and never has to know which mode asked for it.
+     */
+    public record Render(int viewDistance, int simulationDistance) {
+        public static final Render DEFAULT = new Render(0, 0);
+    }
 
     public Arena {
         spawns = List.copyOf(spawns);

@@ -5,6 +5,7 @@ import fr.ayoub.pvp.api.MatchOutcome;
 import fr.ayoub.pvp.api.Team;
 import fr.ayoub.pvp.core.PvPEnginePlugin;
 import fr.ayoub.pvp.core.arena.Arena;
+import fr.ayoub.pvp.core.arena.ArenaJournal;
 import fr.ayoub.pvp.core.lobby.PlayerSnapshot;
 import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.domain.match.MatchState;
@@ -61,9 +62,20 @@ public final class MatchService {
     private final Map<UUID, Match> disconnected = new HashMap<>();
     private final List<Match> active = new ArrayList<>();
 
+    /** How many blocks an arena restore may put back in a single tick. */
+    private final int restoreBudget;
+
+    /** Arenas being put back right now. They are still BUSY, and shutdown must finish them. */
+    private final List<ArenaJournal> restoring = new ArrayList<>();
+
+    /** On the way down there is no next tick, so a restore cannot be spread over any. */
+    private boolean shuttingDown;
+
     public MatchService(PvPEnginePlugin plugin) {
         this.plugin = plugin;
         this.ratings = new RatingService(plugin);
+        this.restoreBudget = Math.max(1,
+                plugin.getConfig().getInt("match.restore-blocks-per-tick", 4000));
     }
 
     public RatingService ratings() {
@@ -686,26 +698,54 @@ public final class MatchService {
             }
         }
 
+        match.arena().clearLitter();
+        active.remove(match);
+        match.state().transitionTo(MatchState.CLOSED);
+
         // The arena goes back into the pool exactly as it was handed out — which, on a map
         // people are allowed to dig, means putting every block they moved back where it was.
         // Without this the second match on an island is played in the ruins of the first.
-        int restored = match.journal().restore();
-        if (restored > 0) {
-            plugin.getLogger().info("Restored " + restored + " block(s) in " + match.arena().id());
+        //
+        // It is put back a few thousand blocks a tick, not all at once: a long match moves
+        // blocks by the hundred thousand, and undoing that inside one tick would freeze the
+        // server for every OTHER match too. Nobody is waiting — the players are already in
+        // the lobby. What matters is that the arena stays BUSY until the last block is back:
+        // released early, it would be handed to the next match as a building site.
+        Arena arena = match.arena();
+        ArenaJournal journal = match.journal();
+        int blocks = journal.size();
+
+        if (shuttingDown) {
+            journal.restoreNow();
+            plugin.arenas().release(arena);
+            return;
         }
 
-        match.arena().clearLitter();
-
-        plugin.arenas().release(match.arena());
-        active.remove(match);
-        match.state().transitionTo(MatchState.CLOSED);
+        restoring.add(journal);
+        journal.restore(plugin, restoreBudget, () -> {
+            restoring.remove(journal);
+            plugin.arenas().release(arena);
+            if (blocks > 0) {
+                plugin.getLogger().info("Restored " + blocks + " block(s) in " + arena.id());
+            }
+        });
     }
 
     /** Called on shutdown so nobody is left stranded in an arena. */
     public void abortAll() {
+        shuttingDown = true;
         for (Match match : List.copyOf(active)) {
             abort(match);
         }
+
+        // An arena that was still being put back tick by tick. Its task dies with the
+        // scheduler, and a server that stops mid-restore writes the ruins to disk — so the
+        // rest of the work happens right here, spike and all. It is the last thing we do.
+        for (ArenaJournal journal : List.copyOf(restoring)) {
+            journal.cancel();
+            journal.restoreNow();
+        }
+        restoring.clear();
     }
 
     // --- spectators ------------------------------------------------------------

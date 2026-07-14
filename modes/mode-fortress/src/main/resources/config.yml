@@ -38,6 +38,10 @@ build:
   size: 50                  # a 50x50x50 room around the cube
   spacing: 128              # distance between two builders' zones
   instances: 8              # how many people can build at the same time
+  # How far a build room is rendered. A room is a 50-block cube in the void — at the server's
+  # default, every builder would force hundreds of chunks of nothing to load, and reach into
+  # their neighbours' rooms, which is exactly what the spacing above exists to prevent.
+  view-distance: 5
 
 # What may be placed, and how many of each.
 #

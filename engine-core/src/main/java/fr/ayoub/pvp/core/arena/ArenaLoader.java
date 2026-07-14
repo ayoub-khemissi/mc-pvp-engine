@@ -82,7 +82,13 @@ public final class ArenaLoader {
         int maxRating = yaml.getInt("rating.max", Integer.MAX_VALUE);
 
         MapDescriptor descriptor = new MapDescriptor(id, modes, minRating, maxRating);
-        return new Arena(descriptor, world, spawns, bounds, markersOf(yaml, world));
+
+        // Optional, and the map is the only thing that knows: see Arena.Render.
+        Arena.Render render = new Arena.Render(
+                yaml.getInt("view-distance", 0),
+                yaml.getInt("simulation-distance", 0));
+
+        return new Arena(descriptor, world, spawns, bounds, markersOf(yaml, world), render);
     }
 
     /**

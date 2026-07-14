@@ -35,6 +35,7 @@ public final class FortressConfig {
     private final int crystalHealth;
     private final int voteSeconds;
     private final String buildWorld;
+    private final int buildViewDistance;
     private final int zoneSize;
     private final int zoneSpacing;
     private final int zoneCount;
@@ -46,6 +47,7 @@ public final class FortressConfig {
         this.crystalHealth = Math.max(1, config.getInt("fortress.crystal.health", 250));
         this.voteSeconds = Math.max(5, config.getInt("fortress.vote-seconds", 30));
         this.buildWorld = config.getString("build.world", "fortress_build");
+        this.buildViewDistance = config.getInt("build.view-distance", 5);
         this.zoneSize = Math.max(size + 4, config.getInt("build.size", 50));
         this.zoneSpacing = Math.max(zoneSize + 16, config.getInt("build.spacing", 128));
         this.zoneCount = Math.max(1, config.getInt("build.instances", 8));
@@ -149,6 +151,11 @@ public final class FortressConfig {
 
     public String buildWorld() {
         return buildWorld;
+    }
+
+    /** How far a build room is rendered. It is a 50-block cube in the void: 5 chunks is plenty. */
+    public int buildViewDistance() {
+        return buildViewDistance;
     }
 
     /** The room around the builder — walls, floor, ceiling. */

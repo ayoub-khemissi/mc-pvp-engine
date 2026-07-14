@@ -50,7 +50,7 @@ public final class Match implements MatchContext {
     private final int[] kills;
 
     /** What this match changed on the map, so the next one starts on the map, not the ruins. */
-    private final ArenaJournal journal = new ArenaJournal();
+    private final ArenaJournal journal;
 
     /** Set by MatchService: how a mode ends its own match. */
     private Consumer<MatchOutcome> finisher = outcome -> { };
@@ -64,6 +64,7 @@ public final class Match implements MatchContext {
         this.arena = arena;
         this.teams = List.copyOf(teams);
         this.handler = mode.createHandler();
+        this.journal = new ArenaJournal(arena.world());
         this.series = new Series(mode.rules().rounds(), teams.size());
         this.kills = new int[teams.size()];
         resetAlive();
