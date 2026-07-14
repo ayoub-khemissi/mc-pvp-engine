@@ -12,6 +12,8 @@ import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -51,6 +53,9 @@ import java.util.UUID;
  * the way in, and tell the match when it dies.
  */
 public final class Corpse {
+
+    /** A player's own 36 slots. Everything past them is armour and the off-hand. */
+    private static final int STORAGE_SLOTS = 36;
 
     private final UUID owner;
     private final String name;
@@ -181,19 +186,60 @@ public final class Corpse {
         remove();
     }
 
-    /** Everything they were carrying, on the ground, where they fell. Exactly like dying. */
+    /**
+     * Everything they were carrying, on the ground, where they fell. Exactly like dying.
+     *
+     * <p>Note that nothing here asks whether the body {@code isValid()}. It is not: by the time
+     * this runs the body has just been killed, and {@code isValid()} means <em>alive</em> and not
+     * removed. Guarding on it — which is what this did — meant the one moment the method exists
+     * for was the one moment it refused to run, and the killer stood over a corpse that dropped
+     * nothing. A dead entity still knows where it is, which is all that is needed.
+     */
     public void spill() {
-        Location at = body.isValid() ? body.getLocation() : null;
-        if (at == null) {
-            return;
-        }
+        Location at = body.getLocation();
 
-        for (ItemStack item : carried) {
+        for (ItemStack item : loot()) {
             if (item != null && !item.getType().isAir()) {
                 at.getWorld().dropItemNaturally(at, item);
             }
         }
         remove();
+    }
+
+    /**
+     * What is actually on the body <b>now</b>: their backpack, which cannot have changed, plus
+     * the armour and the weapon as the fight left them.
+     *
+     * <p>Dropping the saved copy instead would hand the killer a pristine set of the armour they
+     * just spent a minute wearing down. The same rule as {@link #reclaim}: the body is the truth,
+     * the snapshot is only what could not change.
+     */
+    private List<ItemStack> loot() {
+        int storage = Math.min(STORAGE_SLOTS, carried.length);
+
+        List<ItemStack> all = new ArrayList<>();
+        for (int slot = 0; slot < storage; slot++) {
+            all.add(carried[slot]);
+        }
+
+        EntityEquipment worn = body.getEquipment();
+        if (worn == null) {
+            for (int slot = storage; slot < carried.length; slot++) {
+                all.add(carried[slot]);   // armour and off-hand, straight off the snapshot
+            }
+            return all;
+        }
+
+        if (heldSlot >= 0 && heldSlot < storage) {
+            all.set(heldSlot, worn.getItemInMainHand());
+        }
+        all.add(worn.getHelmet());
+        all.add(worn.getChestplate());
+        all.add(worn.getLeggings());
+        all.add(worn.getBoots());
+        all.add(worn.getItemInOffHand());
+
+        return all;
     }
 
     public void remove() {
