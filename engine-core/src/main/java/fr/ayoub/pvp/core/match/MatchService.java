@@ -11,6 +11,7 @@ import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.domain.match.MatchState;
 import fr.ayoub.pvp.domain.match.Series;
 import fr.ayoub.pvp.domain.match.SpawnProtection;
+import fr.ayoub.pvp.domain.match.SpectatorRing;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.title.Title;
@@ -58,6 +59,9 @@ public final class MatchService {
     private final Map<UUID, PlayerSnapshot> snapshots = new HashMap<>();
     private final Map<UUID, Match> spectating = new HashMap<>();
     private final Map<UUID, Long> lastSneak = new HashMap<>();
+
+    /** For a camera-locked spectator: which player they are currently watching through. */
+    private final Map<UUID, UUID> watching = new HashMap<>();
 
     /** Players whose connection dropped, and the match still waiting for them. */
     private final Map<UUID, Match> disconnected = new HashMap<>();
@@ -983,12 +987,24 @@ public final class MatchService {
         snapshots.putIfAbsent(player.getUniqueId(), PlayerSnapshot.of(player));
 
         player.setGameMode(GameMode.SPECTATOR);
-        player.teleport(match.arena().center());
         player.sendMessage(Component.text("Now spectating ", NamedTextColor.AQUA)
                 .append(Component.text(match.mode().id() + " " + match.format().id(),
                         NamedTextColor.WHITE)));
-        player.sendMessage(Component.text("Double-Shift to go back to the lobby.",
+
+        if (match.mode().rules().roamWhileSpectating()) {
+            player.teleport(match.arena().center());
+            player.sendMessage(Component.text("Double-Shift to go back to the lobby.",
+                    NamedTextColor.GRAY));
+            return;
+        }
+
+        // CAMERA LOCKED. A free-fly spectator walks through walls, which in a hidden-information
+        // mode is a ghosting tool. So they ride a player's eyes instead — pinned there, seeing
+        // only what that player sees. Setting the target in the same tick as the game mode is
+        // ignored by the client, so it waits a tick.
+        player.sendMessage(Component.text("Sneak to switch player · Double-Shift to leave.",
                 NamedTextColor.GRAY));
+        Bukkit.getScheduler().runTask(plugin, () -> cycleWatch(player, match));
     }
 
     public void stopSpectating(Player player) {
@@ -996,11 +1012,77 @@ public final class MatchService {
             return;
         }
         lastSneak.remove(player.getUniqueId());
+        watching.remove(player.getUniqueId());
         snapshots.remove(player.getUniqueId());
 
         if (player.isOnline()) {
+            if (player.getSpectatorTarget() != null) {
+                player.setSpectatorTarget(null);   // let go of the eyes before we move them
+            }
             plugin.lobby().send(player);   // resets the game mode and the hotbar
         }
+    }
+
+    /**
+     * Point a locked spectator's camera at the next player in the match.
+     *
+     * <p>"Next" is {@link SpectatorRing} arithmetic over the players who are alive right now: dead
+     * players are frozen at their own spawn and there is nothing to see through them, and a body of
+     * a disconnected player is not a Player at all. If nobody is alive this instant — the sliver
+     * between one round's deaths and the next respawn — the camera holds where it is; the
+     * once-a-second reminder re-attaches it the moment somebody is back.
+     */
+    private void cycleWatch(Player spectator, Match match) {
+        if (!isSpectating(spectator) || !spectator.isOnline()) {
+            return;
+        }
+
+        List<UUID> alive = match.alivePlayers().stream()
+                .map(Player::getUniqueId)
+                .filter(id -> !id.equals(spectator.getUniqueId()))
+                .toList();
+
+        SpectatorRing.next(alive, watching.get(spectator.getUniqueId())).ifPresent(target -> {
+            Player watched = Bukkit.getPlayer(target);
+            if (watched == null) {
+                return;
+            }
+            watching.put(spectator.getUniqueId(), target);
+
+            // A moment as a free camera, or setSpectatorTarget from inside a spectate-target change
+            // can be dropped; then the eyes.
+            spectator.setSpectatorTarget(null);
+            spectator.setSpectatorTarget(watched);
+            spectator.sendActionBar(Component.text("Watching " + watched.getName(),
+                    NamedTextColor.AQUA));
+        });
+    }
+
+    /**
+     * A locked spectator pressed sneak — which Minecraft reads as "let go of this player's eyes".
+     *
+     * <p>They are not allowed to: letting go is exactly the free-fly wallhack this mode does not
+     * have. So a single press moves them to the next player instead, and two in quick succession
+     * mean leave — the same double-tap as a roaming spectator, just on the only key SPECTATOR lets
+     * a locked camera send.
+     *
+     * @return true if this was a locked spectator and we handled it — the caller cancels the detach
+     */
+    public boolean handleSpectatorDetach(Player player) {
+        Match match = spectating.get(player.getUniqueId());
+        if (match == null || match.mode().rules().roamWhileSpectating()) {
+            return false;
+        }
+
+        long now = System.currentTimeMillis();
+        Long previous = lastSneak.put(player.getUniqueId(), now);
+
+        if (previous != null && now - previous <= DOUBLE_SNEAK_MILLIS) {
+            stopSpectating(player);
+        } else {
+            cycleWatch(player, match);
+        }
+        return true;
     }
 
     /**
@@ -1012,8 +1094,9 @@ public final class MatchService {
      * succession do.
      */
     public void handleSpectatorSneak(Player player) {
-        if (!isSpectating(player)) {
-            return;
+        Match match = spectating.get(player.getUniqueId());
+        if (match == null || !match.mode().rules().roamWhileSpectating()) {
+            return;   // a locked camera sneaks through handleSpectatorDetach, not here
         }
 
         long now = System.currentTimeMillis();
@@ -1026,12 +1109,28 @@ public final class MatchService {
 
     /** Called once a second: spectators always know how to get out. */
     public void remindSpectators() {
-        for (UUID id : spectating.keySet()) {
-            Player player = Bukkit.getPlayer(id);
-            if (player != null && player.isOnline()) {
+        for (Map.Entry<UUID, Match> entry : spectating.entrySet()) {
+            Player player = Bukkit.getPlayer(entry.getKey());
+            if (player == null || !player.isOnline()) {
+                continue;
+            }
+
+            if (entry.getValue().mode().rules().roamWhileSpectating()) {
                 player.sendActionBar(Component.text("Double-Shift", NamedTextColor.AQUA)
                         .append(Component.text(" to leave  ·  Shift to descend",
                                 NamedTextColor.GRAY)));
+                continue;
+            }
+
+            // A locked camera whose player died (and so is no longer a valid target) shows the
+            // dead player's grey screen. Re-attach it to somebody still fighting.
+            UUID target = watching.get(entry.getKey());
+            boolean lost = player.getSpectatorTarget() == null
+                    || target == null
+                    || Bukkit.getPlayer(target) == null
+                    || !entry.getValue().isAlive(target);
+            if (lost) {
+                cycleWatch(player, entry.getValue());
             }
         }
     }

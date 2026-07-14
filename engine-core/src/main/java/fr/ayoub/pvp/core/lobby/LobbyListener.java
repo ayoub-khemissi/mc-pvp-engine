@@ -121,6 +121,21 @@ public final class LobbyListener implements Listener {
         }
     }
 
+    /**
+     * A camera-locked spectator pressed sneak, which Minecraft reads as "let go of this player".
+     *
+     * Letting go is the free-fly wallhack the lock exists to prevent, so we never allow it: the
+     * event is cancelled, and the press is turned into "watch the next player" (or, on a
+     * double-tap, "leave") by the match. For a roaming spectator this event never fires, and this
+     * handler leaves them to their normal descend-sneak.
+     */
+    @EventHandler
+    public void onStopSpectating(com.destroystokyo.paper.event.player.PlayerStopSpectatingEntityEvent event) {
+        if (plugin.matches().handleSpectatorDetach(event.getPlayer())) {
+            event.setCancelled(true);
+        }
+    }
+
     @EventHandler
     public void onDrop(PlayerDropItemEvent event) {
         if (lobby.isInLobby(event.getPlayer())) {

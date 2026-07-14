@@ -52,11 +52,22 @@ package fr.ayoub.pvp.api;
  *                         {@code false} sends them back to their <b>own</b> spawn and freezes them
  *                         there — client-side, so nothing rubber-bands (see {@code Freeze}). They
  *                         can look around; they cannot go anywhere.
+ * @param roamWhileSpectating may a spectator of a live match fly the camera wherever they like?
+ *                         <p>
+ *                         Same hole as {@code roamWhileDead}, from outside the match. A free-fly
+ *                         spectator walks through walls, so in a hidden-information mode they are a
+ *                         ghosting tool — worse than a dead player, because they can be sitting in
+ *                         voice chat telling one team where the other's crystal is.
+ *                         <p>
+ *                         {@code false} pins their camera to a <b>player</b>: they see exactly what
+ *                         that player sees, nothing a wall hides, and sneak moves them to the next
+ *                         one. It is the only thing you can watch that leaks nothing the game was
+ *                         not already showing somebody.
  */
 public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
                          boolean building, int respawnSeconds, int setupSeconds,
                          boolean friendlyFire, boolean dropItems, int spawnProtectionSeconds,
-                         boolean roamWhileDead) {
+                         boolean roamWhileDead, boolean roamWhileSpectating) {
 
     /**
      * How long the mode may take in {@code onPrepare} before the engine gives up on it.
@@ -92,7 +103,7 @@ public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
 
     /** Best of 3, no building, no respawn — one lucky hit should not decide a ranked match. */
     public static MatchRules standard() {
-        return new MatchRules(3, 5, 300, false, 0, 10, false, false, 0, true);
+        return new MatchRules(3, 5, 300, false, 0, 10, false, false, 0, true, true);
     }
 
     /**

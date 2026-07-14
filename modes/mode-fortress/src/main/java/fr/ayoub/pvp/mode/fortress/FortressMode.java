@@ -120,7 +120,8 @@ public final class FortressMode implements GameModeDefinition {
                 false,                        // no friendly fire
                 true,                         // and yes, you may throw a teammate your blocks
                 config.spawnProtectionSeconds(),
-                false);                       // the dead do not tour the enemy fortress
+                false,                        // the dead do not tour the enemy fortress
+                false);                       // and neither do spectators — camera locked to a player
     }
 
     /** Fortress brings its own screen: it queues, and it sends you to the build zone. */
