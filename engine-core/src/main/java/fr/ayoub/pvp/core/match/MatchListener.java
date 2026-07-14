@@ -9,6 +9,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
@@ -23,6 +24,51 @@ public final class MatchListener implements Listener {
 
     public MatchListener(MatchService matches) {
         this.matches = matches;
+    }
+
+    /**
+     * A blow landed on the body of a disconnected player.
+     *
+     * <p>It is them, so it plays by their rules: their team-mates cannot hit it, and nobody can
+     * hit it before the countdown is over. When it falls, it falls as they would have — see
+     * {@link MatchService#handleCorpseDeath}.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void onCorpseDamage(EntityDamageEvent event) {
+        matches.corpseOf(event.getEntity()).ifPresent(corpse -> {
+            Match match = corpse.match();
+
+            if (!match.isLive()) {
+                event.setCancelled(true);
+                return;
+            }
+
+            Player attacker = killerOf(event);
+            if (attacker == null) {
+                return;
+            }
+
+            // Friendly fire, on a body. Without this a team could quietly execute the team-mate
+            // whose router died, and hand the enemy the kill.
+            boolean sameTeam = match.teamOf(attacker)
+                    .map(team -> team.index() == corpse.team())
+                    .orElse(false);
+
+            if (sameTeam && !match.mode().rules().friendlyFire()) {
+                event.setCancelled(true);
+            }
+        });
+    }
+
+    /** The body went down. That is a kill, and that is their inventory on the ground. */
+    @EventHandler(ignoreCancelled = true)
+    public void onCorpseDeath(EntityDeathEvent event) {
+        matches.corpseOf(event.getEntity()).ifPresent(corpse -> {
+            event.getDrops().clear();   // the body spills the WHOLE inventory itself, once
+            event.setDroppedExp(0);
+
+            matches.handleCorpseDeath(corpse, event.getEntity().getKiller());
+        });
     }
 
     /**

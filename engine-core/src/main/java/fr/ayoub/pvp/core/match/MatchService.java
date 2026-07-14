@@ -7,6 +7,7 @@ import fr.ayoub.pvp.core.PvPEnginePlugin;
 import fr.ayoub.pvp.core.arena.Arena;
 import fr.ayoub.pvp.core.arena.ArenaJournal;
 import fr.ayoub.pvp.core.lobby.PlayerSnapshot;
+import fr.ayoub.pvp.core.ui.Sidebar;
 import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.domain.match.MatchState;
 import fr.ayoub.pvp.domain.match.Series;
@@ -67,6 +68,9 @@ public final class MatchService {
 
     /** Arenas being put back right now. They are still BUSY, and shutdown must finish them. */
     private final List<ArenaJournal> restoring = new ArrayList<>();
+
+    /** The bodies of players whose connection dropped. They are still in the fight. */
+    private final Map<UUID, Corpse> corpses = new HashMap<>();
 
     /** On the way down there is no next tick, so a restore cannot be spread over any. */
     private boolean shuttingDown;
@@ -310,6 +314,64 @@ public final class MatchService {
         });
     }
 
+    // --- the body of a disconnected player -----------------------------------------------
+
+    /** Is this entity somebody's body? */
+    public Optional<Corpse> corpseOf(org.bukkit.entity.Entity entity) {
+        return corpses.values().stream().filter(corpse -> corpse.is(entity)).findFirst();
+    }
+
+    /**
+     * Somebody killed a disconnected player's body. They killed <b>them</b>.
+     *
+     * <p>Everything a real death does, this does: the kill lands on the scoreboard, the whole
+     * inventory falls on the ground where the body stood, and the owner is out of the fight.
+     * If the mode has respawn, they simply come back when they reconnect — the engine's rejoin
+     * already puts a dead player back on their spawn with a fresh kit, which is exactly what
+     * would have happened had they been standing there themselves.
+     *
+     * <p>The mode's {@code onPlayerDeath} hook does <b>not</b> fire: it takes a Player, and this
+     * player is not on the server. Nothing in the engine needs it, and inventing a fake Player
+     * to satisfy a signature would be worse than the gap.
+     */
+    void handleCorpseDeath(Corpse corpse, Player killer) {
+        Match match = corpse.match();
+        corpses.remove(corpse.owner());
+
+        corpse.spill();
+
+        if (!match.isLive() || !match.isAlive(corpse.owner())) {
+            return;
+        }
+
+        match.eliminate(corpse.owner());
+        countKill(match, corpse.owner(), killer);
+
+        match.broadcast(Component.text(corpse.name(), NamedTextColor.RED)
+                .append(Component.text(" was killed while disconnected", NamedTextColor.GRAY)));
+
+        if (match.mode().rules().hasRespawn()) {
+            checkObjective(match);
+            return;
+        }
+        checkRoundOver(match);
+    }
+
+    /** Does a dropped connection leave a body behind? */
+    private boolean leavesABody() {
+        return plugin.getConfig().getBoolean("match.logout-body", true);
+    }
+
+    /** A kill only counts for the other side. Falling off a cliff is nobody's kill. */
+    private static void countKill(Match match, UUID victim, Player killer) {
+        if (killer == null || killer.getUniqueId().equals(victim)) {
+            return;
+        }
+        match.teamOf(killer)
+                .filter(team -> !team.contains(victim))
+                .ifPresent(team -> match.addKill(team.index()));
+    }
+
     /** A kill only counts for the other side. Falling off a cliff is nobody's kill. */
     private static void countKill(Match match, Player victim, Player killer) {
         if (killer == null || killer.equals(victim)) {
@@ -431,18 +493,39 @@ public final class MatchService {
             UUID id = player.getUniqueId();
 
             matchByPlayer.remove(id);
-            match.eliminate(player);        // out of the fight, not out of the match
 
             if (match.state().isFinished() || !active.contains(match)) {
+                match.eliminate(player);
                 match.removeCompletely(id);
                 snapshots.remove(id);
                 return;
             }
 
+            // THE BODY STAYS. Closing the client used to be the safest move in the game: you
+            // vanished in the same tick, whoever was about to kill you got nothing, and your
+            // inventory left with you. Now what is left behind is a Mannequin wearing your skin
+            // and your armour, with the health you had — and it can be killed, for a real kill
+            // and your real loot. See Corpse.
+            //
+            // Note what is NOT called here: eliminate(). They are still in the fight, because
+            // their body is. A duel does not end because somebody unplugged their router.
+            Optional<Team> team = match.teamOf(id);
+
+            if (match.isLive() && match.isAlive(id) && leavesABody() && team.isPresent()) {
+                corpses.put(id, Corpse.leftBy(player, match, team.get().index()));
+
+                match.broadcast(Component.text(player.getName(), NamedTextColor.YELLOW)
+                        .append(Component.text(" disconnected — their body is still standing",
+                                NamedTextColor.GRAY)));
+            } else {
+                match.eliminate(player);
+
+                match.broadcast(Component.text(player.getName(), NamedTextColor.YELLOW)
+                        .append(Component.text(" disconnected — " + rejoinSeconds()
+                                + "s to come back", NamedTextColor.GRAY)));
+            }
+
             disconnected.put(id, match);
-            match.broadcast(Component.text(player.getName(), NamedTextColor.YELLOW)
-                    .append(Component.text(" disconnected — " + rejoinSeconds()
-                            + "s to come back", NamedTextColor.GRAY)));
 
             Bukkit.getScheduler().runTaskLater(plugin, () -> giveUpOn(match, id),
                     rejoinSeconds() * 20L);
@@ -453,6 +536,14 @@ public final class MatchService {
     private void giveUpOn(Match match, UUID id) {
         if (disconnected.remove(id) == null || match.state().isFinished()) {
             return;   // they came back, or the match is already over
+        }
+
+        // They are not coming back. The body falls where it stands and everything on it hits the
+        // ground — a player who abandons a match does not get to take the loot with them, and
+        // the enemy who never quite reached them still gets to walk over and pick it up.
+        Corpse corpse = corpses.remove(id);
+        if (corpse != null) {
+            corpse.spill();
         }
 
         match.removeCompletely(id);
@@ -495,14 +586,40 @@ public final class MatchService {
 
         matchByPlayer.put(player.getUniqueId(), match);
         plugin.arenas().enter(player, match.arena());
+        player.setGameMode(match.mode().rules().building() ? GameMode.SURVIVAL : GameMode.ADVENTURE);
+        player.setFireTicks(0);
+
+        Corpse corpse = corpses.remove(player.getUniqueId());
+
+        // THEIR BODY IS STILL STANDING. They step back into it: the spot they left, the things
+        // they were carrying, and the health it has LEFT — read off the body, not off a copy
+        // saved when they went. Somebody may have spent the last thirty seconds hitting it, and
+        // if they did, that is what they come back to. Handing back a full-health snapshot would
+        // make pulling the plug a way to heal, which is the whole thing this is here to stop.
+        if (corpse != null && match.isAlive(player.getUniqueId())) {
+            corpse.reclaim(player);
+
+            player.sendMessage(Component.text("You are back — where you left off.",
+                    NamedTextColor.GREEN));
+            match.broadcast(Component.text(player.getName(), NamedTextColor.GREEN)
+                    .append(Component.text(" is back.", NamedTextColor.GRAY)));
+
+            match.handler().onRejoin(match, player, team.get().index());
+            Sidebar.update(plugin, player);
+            return true;
+        }
+
+        // No body, or it was killed while they were away. Then they are dead, and they come back
+        // the way the dead come back: on their spawn, with a kit, and with nothing else.
+        if (corpse != null) {
+            corpse.remove();
+        }
 
         match.revive(player.getUniqueId());
 
-        player.setGameMode(match.mode().rules().building() ? GameMode.SURVIVAL : GameMode.ADVENTURE);
         player.teleport(match.spawn(team.get().index()));
         player.setHealth(20);
         player.setFoodLevel(20);
-        player.setFireTicks(0);
         player.getInventory().clear();
         player.getInventory().setArmorContents(null);
 
@@ -701,6 +818,15 @@ public final class MatchService {
                 stopSpectating(spectator);
             } else {
                 spectating.remove(id);
+            }
+        }
+
+        // No body outlives the match it died in. Left behind, it would be standing in the next
+        // match on this arena wearing the last one's armour.
+        for (UUID id : match.allMembers()) {
+            Corpse corpse = corpses.remove(id);
+            if (corpse != null) {
+                corpse.remove();
             }
         }
 

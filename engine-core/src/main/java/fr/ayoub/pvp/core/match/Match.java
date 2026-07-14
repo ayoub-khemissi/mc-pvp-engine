@@ -221,6 +221,22 @@ public final class Match implements MatchContext {
         alive.remove(player.getUniqueId());
     }
 
+    // A disconnected player has no Player object, and their body is still standing in the
+    // arena where they left it. Everything that can happen to them — being killed, being
+    // counted, forfeiting — has to be reachable by UUID alone.
+
+    public boolean isAlive(UUID player) {
+        return alive.contains(player);
+    }
+
+    public void eliminate(UUID player) {
+        alive.remove(player);
+    }
+
+    public Optional<Team> teamOf(UUID player) {
+        return teams.stream().filter(team -> team.contains(player)).findFirst();
+    }
+
     @Override
     public int round() {
         return series.round();

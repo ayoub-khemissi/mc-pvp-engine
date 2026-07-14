@@ -72,9 +72,31 @@ modes:
 
 # Matches.
 match:
-  # How long a disconnected player keeps their place. A dropped connection in minute
-  # twenty of a thirty-minute match should not end it.
+  # How long a disconnected player keeps their place — and how long their BODY stands.
+  # A dropped connection in minute twenty of a thirty-minute match should not end it.
+  #
+  # Raise this and a disconnected player's body stands for longer, which cuts both ways: more
+  # time for a genuine crash to reconnect into, and more time for the enemy to find the body of
+  # somebody who rage-quit and take everything off it.
   rejoin-seconds: 90
+
+  # DOES PULLING THE PLUG LEAVE A BODY BEHIND?
+  #
+  # It has to. Closing the client was the safest move in the game: you vanished in the same
+  # tick, whoever was about to kill you got nothing, and your inventory left with you. Dying
+  # costs you your loot and hands the other side a kill — disconnecting cost neither. The exit
+  # was cheaper than the fight.
+  #
+  # With this on, what you leave behind is a mannequin wearing your skin, your armour and the
+  # health you had left. It can be killed, and killing it is killing you: the kill counts, your
+  # inventory hits the ground, and you are out of the fight. Reconnect while it still stands and
+  # you step back into it — your spot, your things, and whatever health it has LEFT. It does not
+  # heal while you are gone.
+  logout-body: true
+
+  # How many blocks an arena restore may put back in a single tick, after a match on a map
+  # people were allowed to dig. Doing it all at once freezes the whole server; see ArenaJournal.
+  restore-blocks-per-tick: 4000
 
 # Parties: playing with friends.
 #
