@@ -10,6 +10,7 @@ import fr.ayoub.pvp.core.ui.Sidebar;
 import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.domain.match.MatchState;
 import fr.ayoub.pvp.domain.match.Series;
+import fr.ayoub.pvp.domain.match.SpawnProtection;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.title.Title;
@@ -65,6 +66,9 @@ public final class MatchService {
 
     /** The bodies of players whose connection dropped. They are still in the fight. */
     private final Map<UUID, Corpse> corpses = new HashMap<>();
+
+    /** Who cannot be hurt right now, because they only just came back. Per match. */
+    private final Map<UUID, SpawnProtection> shields = new HashMap<>();
 
     /** On the way down there is no next tick, so a restore cannot be spread over any. */
     private boolean shuttingDown;
@@ -306,6 +310,55 @@ public final class MatchService {
         });
     }
 
+    // --- spawn protection -----------------------------------------------------------------
+
+    private SpawnProtection shieldOf(Match match) {
+        return shields.computeIfAbsent(match.id(), id ->
+                new SpawnProtection(match.mode().rules().spawnProtectionSeconds() * 1000L));
+    }
+
+    /** They just came back. Nobody may touch them for a few seconds. */
+    private void protect(Match match, Player player) {
+        if (!match.mode().rules().hasSpawnProtection()) {
+            return;
+        }
+
+        shieldOf(match).grant(player.getUniqueId(), System.currentTimeMillis());
+
+        int seconds = match.mode().rules().spawnProtectionSeconds();
+        player.sendActionBar(Component.text("Spawn protection — " + seconds + "s",
+                NamedTextColor.AQUA));
+    }
+
+    /** Is this player untouchable right now? */
+    public boolean isProtected(Match match, Player player) {
+        SpawnProtection shield = shields.get(match.id());
+        return shield != null
+                && shield.covers(player.getUniqueId(), System.currentTimeMillis());
+    }
+
+    /**
+     * They swung at somebody. The shield was never meant to be swung from.
+     *
+     * <p>The blow still lands — they chose to fight, and that choice is exactly what costs them
+     * the protection. Told once, not on every hit of the fight they have just started.
+     */
+    public void dropProtection(Match match, Player player) {
+        SpawnProtection shield = shields.get(match.id());
+
+        if (shield != null && shield.dropped(player.getUniqueId())) {
+            player.sendActionBar(Component.text("Spawn protection gone — you attacked.",
+                    NamedTextColor.RED));
+        }
+    }
+
+    /** How long they have left, for whoever is hitting a wall. */
+    public int protectionLeft(Match match, Player player) {
+        SpawnProtection shield = shields.get(match.id());
+        return shield == null ? 0
+                : shield.secondsLeft(player.getUniqueId(), System.currentTimeMillis());
+    }
+
     // --- the body of a disconnected player -----------------------------------------------
 
     /** Is this entity somebody's body? */
@@ -417,6 +470,12 @@ public final class MatchService {
                 victim.getInventory().setArmorContents(null);
 
                 match.handler().onRespawn(match, victim, team.index());
+
+                // A few seconds where nobody can touch them. Without it the strongest play in a
+                // respawn mode is to camp the enemy's pad and kill them as they materialise —
+                // there is nothing they can do, they are dead before the world has drawn itself
+                // around them. It ends the moment they swing; see SpawnProtection.
+                protect(match, victim);
             });
         }, delay * 20L);
     }
@@ -835,6 +894,8 @@ public final class MatchService {
                 corpse.remove();
             }
         }
+
+        shields.remove(match.id());
 
         match.arena().clearLitter();
         active.remove(match);

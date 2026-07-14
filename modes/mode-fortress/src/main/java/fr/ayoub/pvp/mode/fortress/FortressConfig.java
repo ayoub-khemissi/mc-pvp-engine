@@ -33,6 +33,8 @@ public final class FortressConfig {
     private final List<String> ordered;
 
     private final int slots;
+    private final int respawnSeconds;
+    private final int spawnProtectionSeconds;
     private final int crystalHealth;
     private final long crystalHitCooldownTicks;
     private final CrystalRules crystalRules;
@@ -47,6 +49,9 @@ public final class FortressConfig {
         int size = config.getInt("fortress.size", 20);
 
         this.slots = Math.max(1, config.getInt("fortress.slots", 3));
+        this.respawnSeconds = Math.max(0, config.getInt("fortress.respawn-seconds", 10));
+        this.spawnProtectionSeconds =
+                Math.max(0, config.getInt("fortress.spawn-protection-seconds", 5));
         this.crystalHealth = Math.max(1, config.getInt("fortress.crystal.health", 250));
         this.crystalHitCooldownTicks =
                 Math.max(0, config.getLong("fortress.crystal.hit-cooldown-ticks", 10));
@@ -155,6 +160,16 @@ public final class FortressConfig {
      * that value a fortress is a formality, and the first arrow across the map ends the
      * match. Too high and nobody ever finishes one and every game goes to kills.
      */
+    /** How long you lie dead before you are put back on your pad. */
+    public int respawnSeconds() {
+        return respawnSeconds;
+    }
+
+    /** How long you cannot be hurt after coming back — and it ends the moment you swing. */
+    public int spawnProtectionSeconds() {
+        return spawnProtectionSeconds;
+    }
+
     public int crystalHealth() {
         return crystalHealth;
     }

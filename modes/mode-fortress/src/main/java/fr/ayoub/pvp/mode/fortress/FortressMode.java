@@ -115,10 +115,11 @@ public final class FortressMode implements GameModeDefinition {
                 5,                            // 5 · 4 · 3 · 2 · 1
                 30 * 60,                      // thirty minutes, then kills decide it
                 true,                         // building: this is a mode about digging
-                5,                            // respawn, dropping everything you carried
+                config.respawnSeconds(),      // respawn, dropping everything you carried
                 config.voteSeconds() + 25,    // the vote runs inside the setup window
                 false,                        // no friendly fire
-                true);                        // and yes, you may throw a teammate your blocks
+                true,                         // and yes, you may throw a teammate your blocks
+                config.spawnProtectionSeconds());
     }
 
     /** Fortress brings its own screen: it queues, and it sends you to the build zone. */

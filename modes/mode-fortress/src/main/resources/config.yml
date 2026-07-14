@@ -8,6 +8,20 @@ fortress:
   # How many fortresses a player may keep. One of them is the default.
   slots: 3
 
+  # How long you lie dead before you are put back on your pad.
+  respawn-seconds: 10
+
+  # How long you cannot be hurt after coming back.
+  #
+  # A respawn mode without this has a spawn camp in it: the strongest play is to stand on the
+  # enemy's pad and kill them as they materialise, and there is nothing they can do about it —
+  # they are dead before the world has finished drawing itself around them.
+  #
+  # It ENDS THE MOMENT YOU SWING. A shield you can attack from is not a shield, it is five free
+  # seconds of damage: die on purpose, walk into the fight, hit with impunity. The blow you throw
+  # still lands, but you are fair game from that instant. 0 turns it off.
+  spawn-protection-seconds: 5
+
   # The End Crystal must stand on this block, and keep a pocket of air around itself —
   # that pocket is what stops a fortress from being a solid cube of obsidian.
   crystal:

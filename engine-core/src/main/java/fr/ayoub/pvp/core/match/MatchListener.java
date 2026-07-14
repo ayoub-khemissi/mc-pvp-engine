@@ -1,5 +1,7 @@
 package fr.ayoub.pvp.core.match;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -94,6 +96,27 @@ public final class MatchListener implements Listener {
             }
             if (isFriendlyFire(match, victim, event)) {
                 event.setCancelled(true);
+                return;
+            }
+
+            // THE ATTACKER LOSES THEIRS BY ATTACKING. Before we ask whether the VICTIM is
+            // protected — because a protected player who swings has chosen to fight, and the
+            // blow they just threw still lands. A shield you can swing from is not a shield.
+            Player attacker = killerOf(event);
+            if (attacker != null) {
+                matches.dropProtection(match, attacker);
+            }
+
+            // They only just came back. A respawn mode without this is a spawn camp: the best
+            // play is to stand on the enemy's pad and kill them as they materialise.
+            if (matches.isProtected(match, victim)) {
+                event.setCancelled(true);
+
+                if (attacker != null) {
+                    attacker.sendActionBar(Component.text(victim.getName()
+                            + " is spawn-protected — " + matches.protectionLeft(match, victim) + "s",
+                            NamedTextColor.AQUA));
+                }
                 return;
             }
 

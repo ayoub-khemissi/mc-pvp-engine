@@ -31,10 +31,20 @@ package fr.ayoub.pvp.api;
  *                         is a missing feature.
  *                         <p>
  *                         The dead never drop, whatever this says: a spectator has no hands.
+ * @param spawnProtectionSeconds how long a player who just respawned cannot be hurt. 0 = none.
+ *                         <p>
+ *                         Any mode with respawn needs it, or it has a spawn camp in it: the
+ *                         strongest play becomes standing on the enemy's pad and killing them as
+ *                         they materialise, which they can do nothing about — they are dead before
+ *                         the world has drawn itself around them.
+ *                         <p>
+ *                         It <b>ends the instant they attack</b>. A player who can hit while they
+ *                         cannot be hit has not been given a shield, they have been given seconds
+ *                         of free damage: die on purpose, walk into the fight, swing with impunity.
  */
 public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
                          boolean building, int respawnSeconds, int setupSeconds,
-                         boolean friendlyFire, boolean dropItems) {
+                         boolean friendlyFire, boolean dropItems, int spawnProtectionSeconds) {
 
     /**
      * How long the mode may take in {@code onPrepare} before the engine gives up on it.
@@ -63,11 +73,14 @@ public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
         if (respawnSeconds < 0) {
             throw new IllegalArgumentException("respawn delay cannot be negative");
         }
+        if (spawnProtectionSeconds < 0) {
+            throw new IllegalArgumentException("spawn protection cannot be negative");
+        }
     }
 
     /** Best of 3, no building, no respawn — one lucky hit should not decide a ranked match. */
     public static MatchRules standard() {
-        return new MatchRules(3, 5, 300, false, 0, 10, false, false);
+        return new MatchRules(3, 5, 300, false, 0, 10, false, false, 0);
     }
 
     /**
@@ -81,6 +94,10 @@ public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
      */
     public boolean hasRespawn() {
         return respawnSeconds > 0;
+    }
+
+    public boolean hasSpawnProtection() {
+        return spawnProtectionSeconds > 0;
     }
 
     public boolean hasTimeLimit() {
