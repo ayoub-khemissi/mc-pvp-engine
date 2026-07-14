@@ -21,10 +21,20 @@ package fr.ayoub.pvp.api;
  *                         <p>
  *                         Only <b>direct</b> blows are stopped: a swing, an arrow, a trident. If
  *                         a player walks their teammate into lava, that is between them.
+ * @param dropItems        may a player throw something out of their inventory?
+ *                         <p>
+ *                         {@code false} for a kit mode: a duel is five minutes long, nothing in
+ *                         the inventory was earned, and dropping only ever litters the arena.
+ *                         {@code true} for a mode where the inventory is <b>played</b> — where
+ *                         blocks are mined, chests are looted, and handing a teammate the last
+ *                         stack of obsidian is a move. Cancelling that is not a safety net, it
+ *                         is a missing feature.
+ *                         <p>
+ *                         The dead never drop, whatever this says: a spectator has no hands.
  */
 public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
                          boolean building, int respawnSeconds, int setupSeconds,
-                         boolean friendlyFire) {
+                         boolean friendlyFire, boolean dropItems) {
 
     /**
      * How long the mode may take in {@code onPrepare} before the engine gives up on it.
@@ -57,7 +67,7 @@ public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
 
     /** Best of 3, no building, no respawn — one lucky hit should not decide a ranked match. */
     public static MatchRules standard() {
-        return new MatchRules(3, 5, 300, false, 0, 10, false);
+        return new MatchRules(3, 5, 300, false, 0, 10, false, false);
     }
 
     /**

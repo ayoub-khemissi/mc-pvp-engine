@@ -41,13 +41,18 @@ public final class FortressMapBuilder {
     // --- the shape of an instance ---------------------------------------------------
 
     /**
-     * The map's shape has changed. Bump this when it does, and old map files are rebuilt.
+     * The map's shape has changed. Bump this when it does, and the world is generated again.
      *
-     * Version 2 added the voting plains, and had to raise the ceiling to hold them. A server
-     * that already had version 1 maps would otherwise keep them, and its players would be
-     * teleported to a voting plain that was never built.
+     * <p>Version 2 added the voting plains and had to raise the ceiling to hold them. Version 6
+     * doubled the spacing and moved the plains out of sight of the match.
+     *
+     * <p>Version 7 changes <b>nothing</b>. It exists because version 6 shipped with a rebuild
+     * that only deleted the map <em>files</em> and left every block of version 5 standing where
+     * it was — so the new map was built beside the old one, and players fought on a fresh island
+     * with the previous layout's voting plain hanging in the sky over them. Bumping again is what
+     * makes a server that already took version 6 throw the world away and generate it clean.
      */
-    public static final int MAP_VERSION = 6;
+    public static final int MAP_VERSION = 7;
 
     /**
      * How far this map is rendered, in chunks. It is written into map.yml and the engine obeys

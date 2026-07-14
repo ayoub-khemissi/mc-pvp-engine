@@ -174,11 +174,30 @@ public final class MatchListener implements Listener {
         });
     }
 
+    /**
+     * Throwing something on the ground.
+     *
+     * <p>The dead never do: a spectator has no hands. Beyond that it is the <b>mode's</b> call,
+     * and it used to be the engine's — every player in every match was silently stopped, which
+     * is right for a duel (five minutes, a kit nobody earned, and a dropped sword is litter) and
+     * plainly wrong for a mode where the inventory is the game. In Fortress you mine the blocks,
+     * you loot the chests, and handing your teammate the last stack of obsidian while they hold
+     * the gate is a <b>move</b>. Cancelling it was not a safety net, it was a missing feature.
+     */
     @EventHandler(ignoreCancelled = true)
     public void onDrop(PlayerDropItemEvent event) {
-        if (isWatching(event.getPlayer()) || matches.isInMatch(event.getPlayer())) {
+        Player player = event.getPlayer();
+
+        if (isWatching(player)) {
             event.setCancelled(true);
+            return;
         }
+
+        matches.matchOf(player).ifPresent(match -> {
+            if (!match.isLive() || !match.mode().rules().dropItems()) {
+                event.setCancelled(true);   // frozen in the countdown, or a kit mode
+            }
+        });
     }
 
     /** Watching, rather than fighting: a lobby spectator, or a player already eliminated. */

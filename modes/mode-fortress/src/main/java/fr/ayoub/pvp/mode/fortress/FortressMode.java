@@ -110,7 +110,15 @@ public final class FortressMode implements GameModeDefinition {
     public MatchRules rules() {
         // 30s of voting, plus room to fetch and paste two fortresses. The engine aborts the
         // match if we blow through this — which is what it is for.
-        return new MatchRules(1, 5, 30 * 60, true, 5, config.voteSeconds() + 25, false);
+        return new MatchRules(
+                1,                            // one round — a fortress is not a best-of
+                5,                            // 5 · 4 · 3 · 2 · 1
+                30 * 60,                      // thirty minutes, then kills decide it
+                true,                         // building: this is a mode about digging
+                5,                            // respawn, dropping everything you carried
+                config.voteSeconds() + 25,    // the vote runs inside the setup window
+                false,                        // no friendly fire
+                true);                        // and yes, you may throw a teammate your blocks
     }
 
     /** Fortress brings its own screen: it queues, and it sends you to the build zone. */

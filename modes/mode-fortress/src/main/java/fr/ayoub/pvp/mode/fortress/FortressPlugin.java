@@ -79,6 +79,11 @@ public final class FortressPlugin extends JavaPlugin {
 
         // The match world. Its own — Fortress is destructible, and the engine's void arenas
         // are not: no ore to mine, no floor to dig, nothing to loot.
+        //
+        // Whether the map is out of date is decided BEFORE the world exists, because the answer
+        // may be "throw the world away". See wipeIfStale.
+        wipeIfStale();
+
         World arenas = ensureArenaWorld();
         if (arenas != null) {
             buildMapIfMissing(arenas, config);
@@ -138,23 +143,93 @@ public final class FortressPlugin extends JavaPlugin {
      * {@code markers:} in its map.yml, and this never runs again — it only ever fills a gap,
      * it never overwrites.
      */
-    private void buildMapIfMissing(World world, FortressConfig config) {
-        File maps = new File(getDataFolder().getParentFile(), "PvPEngine/maps");
-        File[] existing = maps.listFiles((dir, name) -> name.matches("fortress-\\d+\\.yml"));
-
-        int wanted = Math.max(1, getConfig().getInt("map.instances", 2));
-        int have = existing == null ? 0 : existing.length;
-
-        if (have > 0 && !upToDate(existing)) {
-            // The map's SHAPE changed — version 2 added the voting plains and had to raise
-            // the ceiling to hold them. Keeping the old files would teleport players to a
-            // plain that was never built. Rebuild them all, and say so.
-            getLogger().warning("The fortress map is out of date (the shape changed). Rebuilding it.");
-            for (File file : existing) {
-                file.delete();
-            }
-            have = 0;
+    /**
+     * The map's shape changed. Throw the old world away — do not build on top of it.
+     *
+     * <p>This used to delete the map files and rebuild, and leave <b>every block of the old
+     * layout standing</b>. It did not show while the islands only ever grew in place. Then the
+     * spacing doubled and the voting plains moved, and the new map was built <em>beside</em> the
+     * old one: players fought on the new island with the previous version's voting plain still
+     * hanging in the sky, and abandoned islands sitting where the new ones were not.
+     *
+     * <p>There is no way to clear "the old volume" — we no longer know what the old constants
+     * were, and the next change will have different ones again. The only thing that is correct
+     * for an <b>arbitrary</b> layout change is to delete the world and generate it fresh. It
+     * costs nothing to do: this world holds no player data and no designer's work. Every block
+     * in it was put there by the code in this jar.
+     *
+     * <p>Which is exactly why it stops if it finds a map that is <b>not ours</b> living in it.
+     * We only ever rebuild what we generated.
+     */
+    private void wipeIfStale() {
+        File[] ours = ourMaps();
+        if (ours.length == 0 || upToDate(ours)) {
+            return;
         }
+
+        String name = getConfig().getString("map.world", "fortress");
+
+        if (hasForeignMapIn(name)) {
+            getLogger().warning("The fortress map is out of date, but world '" + name
+                    + "' also holds a map we did not generate. Leaving the world alone —"
+                    + " the old layout may still be visible. Move that map to its own world.");
+            return;
+        }
+
+        getLogger().warning("The fortress map is out of date (the shape changed)."
+                + " Deleting world '" + name + "' and generating it again.");
+
+        for (File file : ours) {
+            file.delete();
+        }
+
+        World world = Bukkit.getWorld(name);
+        if (world != null && !Bukkit.unloadWorld(world, false)) {
+            getLogger().severe("Could not unload '" + name + "'. The old map will still be there.");
+            return;
+        }
+
+        delete(new File(Bukkit.getWorldContainer(), name));
+    }
+
+    /** Is there a map in this world that we did not write? Then it is not ours to delete. */
+    private boolean hasForeignMapIn(String world) {
+        File maps = new File(getDataFolder().getParentFile(), "PvPEngine/maps");
+        File[] all = maps.listFiles((dir, name) -> name.endsWith(".yml"));
+        if (all == null) {
+            return false;
+        }
+
+        for (File file : all) {
+            if (file.getName().matches("fortress-\\d+\\.yml")) {
+                continue;   // ours
+            }
+            if (world.equals(YamlConfiguration.loadConfiguration(file).getString("world"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void delete(File file) {
+        File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                delete(child);
+            }
+        }
+        file.delete();
+    }
+
+    private File[] ourMaps() {
+        File maps = new File(getDataFolder().getParentFile(), "PvPEngine/maps");
+        File[] ours = maps.listFiles((dir, name) -> name.matches("fortress-\\d+\\.yml"));
+        return ours == null ? new File[0] : ours;
+    }
+
+    private void buildMapIfMissing(World world, FortressConfig config) {
+        int wanted = Math.max(1, getConfig().getInt("map.instances", 2));
+        int have = ourMaps().length;   // wipeIfStale has already run: what is left is current
 
         if (have >= wanted) {
             return;
