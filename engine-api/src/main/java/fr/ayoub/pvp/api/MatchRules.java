@@ -11,9 +11,20 @@ package fr.ayoub.pvp.api;
  *                         block, so nothing is even animated. {@code true} → SURVIVAL, and
  *                         the engine stops cancelling breaks and placements — for a mode
  *                         that is about building (a bridge, a wall).
+ * @param friendlyFire     can teammates hurt each other?
+ *                         <p>
+ *                         Almost always {@code false}, and it lives here rather than in a mode
+ *                         because the <b>engine</b> is what knows the teams. A mode that had to
+ *                         cancel its own teammates' blows would be re-implementing a rule the
+ *                         engine is already holding all the pieces of — and every other mode
+ *                         would have to re-implement it again.
+ *                         <p>
+ *                         Only <b>direct</b> blows are stopped: a swing, an arrow, a trident. If
+ *                         a player walks their teammate into lava, that is between them.
  */
 public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
-                         boolean building, int respawnSeconds, int setupSeconds) {
+                         boolean building, int respawnSeconds, int setupSeconds,
+                         boolean friendlyFire) {
 
     /**
      * How long the mode may take in {@code onPrepare} before the engine gives up on it.
@@ -46,7 +57,7 @@ public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
 
     /** Best of 3, no building, no respawn — one lucky hit should not decide a ranked match. */
     public static MatchRules standard() {
-        return new MatchRules(3, 5, 300, false, 0, 10);
+        return new MatchRules(3, 5, 300, false, 0, 10, false);
     }
 
     /**

@@ -1,5 +1,7 @@
 package fr.ayoub.pvp.mode.fortress.match;
 
+import fr.ayoub.pvp.domain.fortress.CrystalHealth;
+import fr.ayoub.pvp.domain.fortress.CrystalHitWindow;
 import org.bukkit.block.Block;
 import org.bukkit.entity.EnderCrystal;
 
@@ -19,16 +21,20 @@ public final class Crystal {
     private final int team;
     private final EnderCrystal entity;
     private final Block base;
-    private final int maxHealth;
+    private final CrystalHealth health;
 
-    private int health;
+    /**
+     * Every attacker's own half-second. Without it, mashing the attack button beats waiting for
+     * the cooldown — see {@link CrystalHitWindow}, which explains the arithmetic.
+     */
+    private final CrystalHitWindow window;
 
-    public Crystal(int team, EnderCrystal entity, Block base, int maxHealth) {
+    public Crystal(int team, EnderCrystal entity, Block base, double maxHealth, long hitCooldownTicks) {
         this.team = team;
         this.entity = entity;
         this.base = base;
-        this.maxHealth = maxHealth;
-        this.health = maxHealth;
+        this.health = new CrystalHealth(maxHealth);
+        this.window = new CrystalHitWindow(hitCooldownTicks);
     }
 
     public int team() {
@@ -58,27 +64,48 @@ public final class Crystal {
         return entity;
     }
 
+    /** What the boss bar shows. Rounded up while it is alive: 0.2 left is not "0". */
     public int health() {
-        return health;
+        return health.display();
     }
 
     public int maxHealth() {
-        return maxHealth;
+        return (int) Math.ceil(health.max());
     }
 
     public boolean isDead() {
-        return health <= 0;
+        return health.isDead();
     }
 
-    /** @return true if that was the blow that broke it */
-    public boolean damage(int amount) {
-        health = Math.max(0, health - Math.max(0, amount));
-        return isDead();
+    /**
+     * @param amount what the blow was worth — <b>fractions and all</b>. This used to be an int
+     *               floored to a minimum of 1, which meant a spammed swing and a fully charged
+     *               one both took exactly 1 off, and mashing beat waiting.
+     * @return true if that was the blow that broke it
+     */
+    public boolean damage(double amount) {
+        return health.damage(amount);
+    }
+
+    /**
+     * How much of this attacker's blow the crystal is willing to take right now.
+     *
+     * Their own last blow holds it for half a second, so that the attack cooldown Minecraft
+     * already applies is worth respecting. It is <b>theirs</b>, not the crystal's: their
+     * teammates are not on it, and a three-man push is still worth three men.
+     */
+    public double admit(java.util.UUID attacker, double amount, long tick) {
+        return window.admit(attacker, amount, tick);
+    }
+
+    /** Straight to zero. The obsidian under it was pulled out. */
+    public boolean kill() {
+        return health.damage(health.max());
     }
 
     /** 0.0 … 1.0, for the bar. */
     public float fraction() {
-        return maxHealth <= 0 ? 0f : (float) health / maxHealth;
+        return health.fraction();
     }
 
     public void remove() {

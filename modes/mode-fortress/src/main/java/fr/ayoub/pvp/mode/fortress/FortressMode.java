@@ -110,7 +110,7 @@ public final class FortressMode implements GameModeDefinition {
     public MatchRules rules() {
         // 30s of voting, plus room to fetch and paste two fortresses. The engine aborts the
         // match if we blow through this — which is what it is for.
-        return new MatchRules(1, 5, 30 * 60, true, 5, config.voteSeconds() + 25);
+        return new MatchRules(1, 5, 30 * 60, true, 5, config.voteSeconds() + 25, false);
     }
 
     /** Fortress brings its own screen: it queues, and it sends you to the build zone. */

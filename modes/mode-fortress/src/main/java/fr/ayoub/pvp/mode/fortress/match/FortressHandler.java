@@ -9,6 +9,8 @@ import fr.ayoub.pvp.domain.fortress.BlockIds;
 import fr.ayoub.pvp.domain.fortress.BlockPos;
 import fr.ayoub.pvp.domain.fortress.Blueprint;
 import fr.ayoub.pvp.domain.fortress.Candidate;
+import fr.ayoub.pvp.domain.fortress.CrystalHitWindow;
+import fr.ayoub.pvp.domain.fortress.CrystalRules;
 import fr.ayoub.pvp.domain.fortress.CubeRotation;
 import fr.ayoub.pvp.mode.fortress.FortressConfig;
 import fr.ayoub.pvp.mode.fortress.map.FortressMapBuilder;
@@ -299,7 +301,7 @@ public final class FortressHandler implements MatchHandler {
         entity.setShowingBottom(false);
 
         Crystal crystal = new Crystal(team, entity, location.getBlock().getRelative(0, -1, 0),
-                config.crystalHealth());
+                config.crystalHealth(), config.crystalHitCooldownTicks());
 
         crystals.put(team, crystal);
         registry.register(this, crystal);
@@ -310,7 +312,7 @@ public final class FortressHandler implements MatchHandler {
         if (context == null || crystal.isDead()) {
             return;
         }
-        crystal.damage(crystal.health());   // straight to zero
+        crystal.kill();   // straight to zero: the obsidian under it is gone
         breakCrystal(crystal);
     }
 
@@ -353,16 +355,51 @@ public final class FortressHandler implements MatchHandler {
     // --- the crystal being broken -------------------------------------------------------
 
     /**
-     * A hit landed on a crystal. Called by the listener, which has already thrown the vanilla
-     * damage away — an End Crystal has one hit point and explodes, and a fortress whose
-     * crystal dies to the first arrow is not a fortress.
+     * A blow landed on a crystal.
+     *
+     * <p>{@code raw} is what Minecraft says it was worth, and it already carries everything
+     * that makes a hit good or bad: the weapon's damage, the attack cooldown (a fifth of it if
+     * the swing was mashed, all of it if the player waited), ×1.5 for a critical, Sharpness,
+     * Strength — and for an arrow, the draw and Power. We scale it, we never recompute it.
+     *
+     * <p>Then it goes through the attacker's own half-second window, and <b>that is the piece
+     * that was missing</b>. The cooldown scaling alone does not punish spam: mashed at ten
+     * clicks a second a diamond sword out-damages a patient one, 15.4 to 11.2. Vanilla only
+     * escapes that because a mob is invulnerable for half a second after being hurt — and a
+     * crystal is not a mob, so it never had that. See {@link CrystalHitWindow}.
+     *
+     * <p>Melee only. A bow rate-limits itself and a stick of TNT has to be carried there; the
+     * one blow a player can spam is the one they swing.
      */
-    void onCrystalHit(Crystal crystal, int damage, Player attacker) {
+    void onCrystalHit(Crystal crystal, CrystalRules.Source source, double raw, Player attacker) {
         if (context == null || crystal.isDead()) {
             return;
         }
 
-        boolean broken = crystal.damage(damage);
+        // You cannot sabotage your own crystal. Not with a sword, not with an arrow, not with
+        // a stick of TNT you dropped at its feet — a match should never be decided by one
+        // player on the losing side deciding to end it.
+        //
+        // The obsidian under it is a different matter, and deliberately so: digging your own
+        // fortress out is a thing players legitimately do, and drawing the line at "you may
+        // not break this one block" would be a stranger rule than the own goal it prevents.
+        if (attacker != null && isOwnCrystal(crystal, attacker)) {
+            return;
+        }
+
+        double amount = config.crystalRules().damageOf(source, raw);
+        if (amount <= 0) {
+            return;
+        }
+
+        if (source == CrystalRules.Source.MELEE && attacker != null) {
+            amount = crystal.admit(attacker.getUniqueId(), amount, Bukkit.getCurrentTick());
+        }
+        if (amount <= 0) {
+            return;   // still inside their own window: the crystal does not react, as a mob would not
+        }
+
+        boolean broken = crystal.damage(amount);
         updateBars();
 
         crystal.entity().getWorld().playSound(crystal.entity().getLocation(),
@@ -371,6 +408,13 @@ public final class FortressHandler implements MatchHandler {
         if (broken) {
             breakCrystal(crystal);
         }
+    }
+
+    /** Is this player defending the crystal they are hitting? */
+    private boolean isOwnCrystal(Crystal crystal, Player player) {
+        return context.teamOf(player)
+                .map(team -> team.index() == crystal.team())
+                .orElse(false);
     }
 
     private void breakCrystal(Crystal crystal) {

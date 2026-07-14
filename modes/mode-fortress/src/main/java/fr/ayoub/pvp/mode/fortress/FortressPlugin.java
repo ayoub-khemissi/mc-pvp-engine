@@ -43,6 +43,20 @@ public final class FortressPlugin extends JavaPlugin {
             return;
         }
 
+        // Nothing on this map may be visible from anything else on it: not the enemy's voting
+        // plain, not the map you are about to fight on, not the match next door. All three have
+        // been broken at least once by a number changed elsewhere, so the geometry is checked
+        // here, against the fortress size THIS server configured — a bigger fortress makes the
+        // voting plain deeper and eats the gap behind it.
+        try {
+            FortressMapBuilder.layout(config.fortressSize());
+        } catch (IllegalArgumentException e) {
+            getLogger().severe("The fortress map geometry does not hold: " + e.getMessage());
+            getLogger().severe("Lower 'fortress.size', or move the islands further apart. Disabling.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
         // Our own table, in our own jar, run by the engine's migration machinery.
         PvPEngineApi.storage().migrate(
                 "fortress",

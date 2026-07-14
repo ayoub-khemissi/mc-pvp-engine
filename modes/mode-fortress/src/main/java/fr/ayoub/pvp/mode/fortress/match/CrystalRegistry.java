@@ -39,8 +39,10 @@ public final class CrystalRegistry {
         return byEntity.containsKey(entity);
     }
 
-    void hit(UUID entity, int damage, org.bukkit.entity.Player attacker) {
-        find(entity).ifPresent(found -> found.handler().onCrystalHit(found.crystal(), damage, attacker));
+    void hit(UUID entity, fr.ayoub.pvp.domain.fortress.CrystalRules.Source source,
+             double raw, org.bukkit.entity.Player attacker) {
+        find(entity).ifPresent(found ->
+                found.handler().onCrystalHit(found.crystal(), source, raw, attacker));
     }
 
     /** Somebody is digging out the block a crystal stands on. */

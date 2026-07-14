@@ -1,5 +1,6 @@
 package fr.ayoub.pvp.mode.fortress;
 
+import fr.ayoub.pvp.domain.fortress.CrystalRules;
 import fr.ayoub.pvp.domain.fortress.BuildRules;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
@@ -33,6 +34,8 @@ public final class FortressConfig {
 
     private final int slots;
     private final int crystalHealth;
+    private final long crystalHitCooldownTicks;
+    private final CrystalRules crystalRules;
     private final int voteSeconds;
     private final String buildWorld;
     private final int buildViewDistance;
@@ -45,6 +48,13 @@ public final class FortressConfig {
 
         this.slots = Math.max(1, config.getInt("fortress.slots", 3));
         this.crystalHealth = Math.max(1, config.getInt("fortress.crystal.health", 250));
+        this.crystalHitCooldownTicks =
+                Math.max(0, config.getLong("fortress.crystal.hit-cooldown-ticks", 10));
+        this.crystalRules = new CrystalRules(
+                Math.max(0, config.getDouble("fortress.crystal.damage.melee", 1.0)),
+                Math.max(0, config.getDouble("fortress.crystal.damage.projectile", 1.0)),
+                Math.max(0, config.getDouble("fortress.crystal.damage.explosion", 1.0)),
+                Math.max(0, config.getDouble("fortress.crystal.damage.other", 1.0)));
         this.voteSeconds = Math.max(5, config.getInt("fortress.vote-seconds", 30));
         this.buildWorld = config.getString("build.world", "fortress_build");
         this.buildViewDistance = config.getInt("build.view-distance", 5);
@@ -147,6 +157,16 @@ public final class FortressConfig {
      */
     public int crystalHealth() {
         return crystalHealth;
+    }
+
+    /** How long one attacker's blow keeps the crystal to itself. See the config for why. */
+    public long crystalHitCooldownTicks() {
+        return crystalHitCooldownTicks;
+    }
+
+    /** What each kind of blow is worth against a crystal. */
+    public CrystalRules crystalRules() {
+        return crystalRules;
     }
 
     public String buildWorld() {

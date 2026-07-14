@@ -1,5 +1,6 @@
 package fr.ayoub.pvp.mode.fortress.map;
 
+import fr.ayoub.pvp.domain.fortress.IslandLayout;
 import fr.ayoub.pvp.mode.fortress.FortressConfig;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -46,10 +47,34 @@ public final class FortressMapBuilder {
      * that already had version 1 maps would otherwise keep them, and its players would be
      * teleported to a voting plain that was never built.
      */
-    public static final int MAP_VERSION = 5;
+    public static final int MAP_VERSION = 6;
+
+    /**
+     * How far this map is rendered, in chunks. It is written into map.yml and the engine obeys
+     * it (see Arena.Render): an island is 128 blocks across and a player standing at their own
+     * gate has to SEE the enemy fortress, so the engine's small default would give them fog
+     * where the target should be.
+     *
+     * <p>Everything below is spaced against it. Raise this and the spacings must grow with it —
+     * which they will, because {@link IslandLayout} refuses to be built otherwise.
+     */
+    public static final int VIEW_DISTANCE = 10;
+    public static final int SIMULATION_DISTANCE = 6;
+
+    /** How far a player can actually see, in blocks. Chunks are sent whole; see IslandLayout. */
+    private static final int SIGHT = IslandLayout.sightOf(VIEW_DISTANCE);
 
     public static final int SIZE = 128;          // the island, in blocks
-    public static final int SPACING = 256;       // between two instances
+
+    /**
+     * Between two instances.
+     *
+     * <p>It was 256, which left 128 blocks of empty air between two islands — and a player sees
+     * 192. Two matches running at once could watch each other, and nobody noticed because you
+     * only ever test one at a time. The void in between costs nothing: its chunks hold no blocks
+     * and are never loaded, because nobody is ever standing in them.
+     */
+    public static final int SPACING = 512;
     public static final int BEDROCK_Y = 40;
     public static final int SURFACE_Y = 62;      // the last solid block: you stand on 63
     public static final int CEILING_Y = 200;
@@ -58,17 +83,35 @@ public final class FortressMapBuilder {
     private static final int PAD_MARGIN = 18;
 
     /**
-     * The voting plains: one per team, and <b>three hundred blocks apart</b>.
+     * The geometry, checked against itself — <b>with the fortress size this server actually
+     * configured</b>, because a bigger fortress makes the voting plain deeper and eats into the
+     * gap behind it.
      *
-     * They used to be thirty-six blocks apart, which meant a team could stand on its own plain
-     * and read the enemy's three fortresses like a menu — the entire point of a secret vote,
-     * gone. Distance is the only fix that actually works: a wall between them is no obstacle
-     * to a spectator, who flies through walls. Three hundred is comfortably past the server's
-     * view distance, so there is nothing to see, not merely something hard to see.
+     * <p>Called at boot. Every one of the three "X must not be visible from Y" rules in this
+     * file has been broken at least once by somebody (me) changing an unrelated number, so they
+     * are no longer comments — they are a constructor that throws.
+     */
+    public static IslandLayout layout(int cube) {
+        return new IslandLayout(SIZE, SPACING, VOTE_Z_TEAM_0, VOTE_Z_TEAM_1,
+                cube + VOTE_APRON + VOTE_GAP, SIGHT);
+    }
+
+    /**
+     * The voting plains: one per team, and far enough from everything to be invisible from it.
+     *
+     * <p>They were 36 blocks apart, and a team could stand on its own plain and read the enemy's
+     * three fortresses like a menu. That was moved to 300 — comfortably past the view distance
+     * <b>of the day</b>, which was 6 chunks. Then the view distance became 10, and 300 became
+     * close enough that a player at the far edge of the island had the plain hanging in the sky
+     * over their match.
+     *
+     * <p>A wall would not have helped either time: a spectator flies through walls. Distance is
+     * the only mechanism that works, and it is free — so these are now spaced against SIGHT, and
+     * {@link IslandLayout} throws at boot if any of it ever stops being true.
      */
     public static final int VOTE_Y = 130;
-    private static final int VOTE_Z_TEAM_0 = 300;
-    private static final int VOTE_Z_TEAM_1 = 600;
+    private static final int VOTE_Z_TEAM_0 = 512;
+    private static final int VOTE_Z_TEAM_1 = 1024;
     private static final int VOTE_GAP = 8;       // between two fortresses on display
 
     /**
@@ -543,9 +586,9 @@ public final class FortressMapBuilder {
         // at the engine's default they would be staring at fog where the target should be.
         //
         // 8 chunks covers the island, +2 so the far wall is not on the edge of the fog.
-        yaml.set("view-distance", 10);
+        yaml.set("view-distance", VIEW_DISTANCE);
         // Redstone traps only need to tick when somebody is close enough to trip them.
-        yaml.set("simulation-distance", 6);
+        yaml.set("simulation-distance", SIMULATION_DISTANCE);
 
         for (int team = 0; team < 2; team++) {
             int px = padX(ox, cube);
@@ -582,7 +625,7 @@ public final class FortressMapBuilder {
         // Far enough to hold the voting plains. The engine pushes a player back inside the
         // bounds, so a boundary that stopped at the island would drag a voter out of the vote.
         // Nothing is out there but the two plains: the island itself is walled with barriers.
-        yaml.set("bounds.max-z", (double) oz + VOTE_Z_TEAM_1 + 100);
+        yaml.set("bounds.max-z", (double) oz + VOTE_Z_TEAM_1 + 150);
 
         File maps = new File(plugin.getDataFolder().getParentFile(), "PvPEngine/maps");
         maps.mkdirs();

@@ -19,6 +19,35 @@ fortress:
     # endgame: too low and a fortress is a formality, too high and nobody ever finishes one.
     health: 250
 
+    # THE HALF-SECOND THAT MAKES THE ATTACK COOLDOWN MEAN ANYTHING.
+    #
+    # Minecraft scales a swing by how far the attack cooldown has recharged: 20% of the
+    # weapon's damage if you mashed the button, 100% if you waited. That sounds like enough
+    # to punish spam. It is not. A diamond sword does 7 over a 0.625s recharge = 11.2 damage
+    # a second if you wait. Mash at ten clicks a second and each swing lands at 22% — 1.54
+    # damage, ten times a second = 15.4. SPAM WINS.
+    #
+    # Vanilla is not broken this way because a mob is invulnerable for half a second after it
+    # is hurt: the two mechanics only work as a PAIR. An End Crystal is not a LivingEntity and
+    # has no such window. This is it.
+    #
+    # It belongs to the ATTACKER, not to the crystal — vanilla's belongs to the victim, which
+    # would mean three players pushing a crystal eat each other's blows and are worth one.
+    # 10 ticks = half a second, as in vanilla. 0 turns it off (and spam becomes optimal).
+    hit-cooldown-ticks: 10
+
+    # What each kind of blow is worth against the crystal. The game has already done the hard
+    # part — the number it hands us is the weapon's damage, scaled by the attack cooldown,
+    # x1.5 for a critical, plus Sharpness and Strength; an arrow arrives scaled by its draw
+    # and by Power. These only decide how much a CRYSTAL cares, which is not the same question
+    # as how much a player would. Raise 'explosion' to make TNT a real siege tool; drop
+    # 'projectile' if archery from a safe rooftop is winning matches on its own.
+    damage:
+      melee: 1.0
+      projectile: 1.0
+      explosion: 1.0
+      other: 1.0        # fire, lava, a falling anvil. 0 makes the crystal immune to them.
+
 # The match map: an island you can dig, with a fortress pad at each end.
 #
 # Built once, on first start, IF there is no fortress map yet. A designer's map drops into

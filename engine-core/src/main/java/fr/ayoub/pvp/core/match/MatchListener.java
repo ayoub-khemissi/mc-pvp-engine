@@ -46,6 +46,10 @@ public final class MatchListener implements Listener {
                 event.setCancelled(true);   // spectators take no damage
                 return;
             }
+            if (isFriendlyFire(match, victim, event)) {
+                event.setCancelled(true);
+                return;
+            }
 
             if (victim.getHealth() - event.getFinalDamage() > 0) {
                 return;   // they survive
@@ -191,6 +195,36 @@ public final class MatchListener implements Listener {
         return event.getFrom().getBlockX() != event.getTo().getBlockX()
                 || event.getFrom().getBlockY() != event.getTo().getBlockY()
                 || event.getFrom().getBlockZ() != event.getTo().getBlockZ();
+    }
+
+    /**
+     * A blow one teammate landed on another.
+     *
+     * <p>The engine stops it, not the mode: the engine is what holds the teams, and a mode that
+     * cancelled its own teammates' blows would be re-implementing a rule the engine already has
+     * every piece of — and the next mode would have to write it again. Whether it is allowed at
+     * all is the mode's call, once, in {@link fr.ayoub.pvp.api.MatchRules}.
+     *
+     * <p><b>Direct blows only.</b> A swing, an arrow, a trident — the things one player aims at
+     * another. Lava, fire, a fall, a mob is not friendly fire, it is the map, and a player who
+     * walks their teammate into a lava pit has earned it.
+     *
+     * <p>Hurting <b>yourself</b> is not friendly fire either: your own arrow coming back down on
+     * your head is between you and physics.
+     */
+    private static boolean isFriendlyFire(Match match, Player victim, EntityDamageEvent event) {
+        if (match.mode().rules().friendlyFire()) {
+            return false;
+        }
+
+        Player attacker = killerOf(event);
+        if (attacker == null || attacker.equals(victim)) {
+            return false;
+        }
+
+        return match.teamOf(attacker)
+                .filter(team -> team.contains(victim.getUniqueId()))
+                .isPresent();
     }
 
     /** Who gets the kill: the attacker, or whoever shot the arrow. */

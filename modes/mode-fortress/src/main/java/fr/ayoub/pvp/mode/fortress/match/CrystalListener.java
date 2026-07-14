@@ -1,5 +1,6 @@
 package fr.ayoub.pvp.mode.fortress.match;
 
+import fr.ayoub.pvp.domain.fortress.CrystalRules;
 import org.bukkit.entity.EnderCrystal;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -8,6 +9,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
@@ -34,7 +36,24 @@ public final class CrystalListener implements Listener {
 
     /**
      * Highest priority, and never ignoring cancelled: whatever else the server thinks about
-     * this damage, a match crystal does not take it. What it takes instead is decided by us.
+     * this damage, a match crystal does not <b>die</b> of it. What it takes instead is decided
+     * by the match, which keeps the health that actually counts.
+     *
+     * <p>The <b>amount</b>, though, is taken exactly as Minecraft reports it. The game has
+     * already done the hard part: the number in this event is the weapon's attack damage,
+     * scaled by how far the attack cooldown had recharged, ×1.5 for a critical, plus Sharpness
+     * and Strength; an arrow arrives scaled by its draw and by Power. Re-deriving that would be
+     * re-implementing the game and getting it subtly wrong, and the player's own damage
+     * indicator would then disagree with what the crystal took.
+     *
+     * <p>This is where the mode used to throw all of it away:
+     *
+     * <pre>int damage = (int) Math.max(1, Math.round(event.getDamage()));</pre>
+     *
+     * <p>Rounded to an int and floored to 1 — so a swing mashed at 20% charge and a patient one
+     * at 100% both took exactly 1 off a weak weapon, and mashing the button four times a second
+     * out-damaged waiting for the cooldown. The floor did not lose precision, it <b>inverted the
+     * rule it was meant to enforce</b>.
      */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onDamage(EntityDamageEvent event) {
@@ -45,8 +64,32 @@ public final class CrystalListener implements Listener {
 
         event.setCancelled(true);   // vanilla would end it here, in one hit
 
-        int damage = (int) Math.max(1, Math.round(event.getDamage()));
-        registry.hit(crystal.getUniqueId(), damage, attacker(event));
+        registry.hit(crystal.getUniqueId(), sourceOf(event), event.getDamage(), attacker(event));
+    }
+
+    /**
+     * What kind of blow this was. The match decides what each kind is worth — a bow and a
+     * stick of TNT do not have to mean against a crystal what they mean against a player.
+     *
+     * <p>The explosion check comes first on purpose: a stick of TNT arrives as an
+     * {@link EntityDamageByEntityEvent} whose damager is the TNT, which would otherwise read
+     * as "some entity hit it" and be counted as a melee swing.
+     */
+    private static CrystalRules.Source sourceOf(EntityDamageEvent event) {
+        DamageCause cause = event.getCause();
+
+        if (cause == DamageCause.ENTITY_EXPLOSION || cause == DamageCause.BLOCK_EXPLOSION) {
+            return CrystalRules.Source.EXPLOSION;
+        }
+        if (event instanceof EntityDamageByEntityEvent byEntity) {
+            if (byEntity.getDamager() instanceof Projectile) {
+                return CrystalRules.Source.PROJECTILE;
+            }
+            if (byEntity.getDamager() instanceof Player) {
+                return CrystalRules.Source.MELEE;
+            }
+        }
+        return CrystalRules.Source.OTHER;
     }
 
     /**
