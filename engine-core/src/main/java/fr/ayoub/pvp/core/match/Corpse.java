@@ -126,9 +126,12 @@ public final class Corpse {
     /**
      * What it wears.
      *
-     * <p>Nothing drops from the equipment itself — every drop chance is zeroed — because the body
-     * spills the <b>whole</b> inventory in one go when it dies, and armour that fell twice would
-     * be armour duplicated.
+     * <p>No drop chances are set here, and they must not be: a Mannequin extends {@code Avatar},
+     * not {@code Mob}, and drop chances are a Mob's idea — {@code setHelmetDropChance} throws
+     * {@code "Cannot set drop chance for non-Mob entity"}. Which is exactly right, because a
+     * non-Mob does not scatter its equipment when it dies. The body spills the <b>whole</b>
+     * inventory itself, once, in {@link #spill()}, and armour that fell twice would be armour
+     * duplicated.
      */
     private static void dress(EntityEquipment worn, PlayerInventory carried) {
         worn.setHelmet(carried.getHelmet());
@@ -137,13 +140,6 @@ public final class Corpse {
         worn.setBoots(carried.getBoots());
         worn.setItemInMainHand(carried.getItemInMainHand());
         worn.setItemInOffHand(carried.getItemInOffHand());
-
-        worn.setHelmetDropChance(0f);
-        worn.setChestplateDropChance(0f);
-        worn.setLeggingsDropChance(0f);
-        worn.setBootsDropChance(0f);
-        worn.setItemInMainHandDropChance(0f);
-        worn.setItemInOffHandDropChance(0f);
     }
 
     // --- what can happen to it ----------------------------------------------------------

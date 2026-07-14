@@ -501,34 +501,48 @@ public final class MatchService {
                 return;
             }
 
+            // THEIR PLACE IS HELD FIRST. Everything below this line is a feature; this line is
+            // the contract, and the contract does not get to depend on the feature. It did once:
+            // leaving a body threw, the exception unwound out of the quit event before the two
+            // lines below ever ran, and the player came back to find the engine had forgotten
+            // them entirely — no body AND no way back into their own match.
+            disconnected.put(id, match);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> giveUpOn(match, id),
+                    rejoinSeconds() * 20L);
+
             // THE BODY STAYS. Closing the client used to be the safest move in the game: you
             // vanished in the same tick, whoever was about to kill you got nothing, and your
             // inventory left with you. Now what is left behind is a Mannequin wearing your skin
             // and your armour, with the health you had — and it can be killed, for a real kill
             // and your real loot. See Corpse.
             //
-            // Note what is NOT called here: eliminate(). They are still in the fight, because
-            // their body is. A duel does not end because somebody unplugged their router.
+            // Note what is NOT called on this path: eliminate(). They are still in the fight,
+            // because their body is. A duel does not end because somebody unplugged their router.
             Optional<Team> team = match.teamOf(id);
 
             if (match.isLive() && match.isAlive(id) && leavesABody() && team.isPresent()) {
-                corpses.put(id, Corpse.leftBy(player, match, team.get().index()));
+                try {
+                    corpses.put(id, Corpse.leftBy(player, match, team.get().index()));
 
-                match.broadcast(Component.text(player.getName(), NamedTextColor.YELLOW)
-                        .append(Component.text(" disconnected — their body is still standing",
-                                NamedTextColor.GRAY)));
-            } else {
-                match.eliminate(player);
+                    match.broadcast(Component.text(player.getName(), NamedTextColor.YELLOW)
+                            .append(Component.text(" disconnected — their body is still standing",
+                                    NamedTextColor.GRAY)));
+                    return;
 
-                match.broadcast(Component.text(player.getName(), NamedTextColor.YELLOW)
-                        .append(Component.text(" disconnected — " + rejoinSeconds()
-                                + "s to come back", NamedTextColor.GRAY)));
+                } catch (RuntimeException e) {
+                    // A body we could not stand up is a worse outcome than no body — but it is a
+                    // FAR worse outcome to also lose the player's place in the match over it. Say
+                    // so loudly, take the old behaviour, and let them come back.
+                    plugin.getLogger().severe("Could not leave a body for " + player.getName()
+                            + ": " + e + " — they keep their place, but they cannot be killed"
+                            + " while they are away.");
+                }
             }
 
-            disconnected.put(id, match);
-
-            Bukkit.getScheduler().runTaskLater(plugin, () -> giveUpOn(match, id),
-                    rejoinSeconds() * 20L);
+            match.eliminate(player);
+            match.broadcast(Component.text(player.getName(), NamedTextColor.YELLOW)
+                    .append(Component.text(" disconnected — " + rejoinSeconds()
+                            + "s to come back", NamedTextColor.GRAY)));
         });
     }
 
