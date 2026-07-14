@@ -44,6 +44,16 @@ world:
   # view-distance — you would be ticking what nobody can see.
   simulation-distance: 4
 
+  # The locator bar: the strip of dots above the hotbar showing where every player is.
+  #
+  # Minecraft turns it on by default, which on a PvP server is a wallhack — waypoints are
+  # broadcast across the whole dimension, past the view distance and straight through walls.
+  # An attacker knows where the defenders are standing inside a fortress they cannot see into.
+  #
+  # Per WORLD: there is no way to show a player their team-mates and hide their enemies, so it
+  # is off for everyone. Turn it on for a mode where knowing where people are IS the game.
+  locator-bar: false
+
 # Game modes.
 #
 # A mode is its own plugin: it appears here as soon as its jar is in plugins/.

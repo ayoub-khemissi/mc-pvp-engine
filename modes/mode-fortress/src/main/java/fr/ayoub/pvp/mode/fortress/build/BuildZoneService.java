@@ -119,6 +119,11 @@ public final class BuildZoneService {
         world.setViewDistance(view);
         world.setSendViewDistance(view);
         world.setSimulationDistance(view);
+
+        // The locator bar would put a dot on every other builder, through the void, in a world
+        // whose whole design is that nobody can see anybody else's fortress. The engine turns it
+        // off in the worlds it owns; this one is the mode's, so the mode turns it off.
+        world.setGameRule(org.bukkit.GameRule.LOCATOR_BAR, false);
     }
 
     public World world() {

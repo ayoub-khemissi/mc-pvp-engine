@@ -1,6 +1,7 @@
 package fr.ayoub.pvp.core.world;
 
 import fr.ayoub.pvp.core.arena.Arena;
+import org.bukkit.GameRule;
 import org.bukkit.World;
 import org.bukkit.plugin.Plugin;
 
@@ -42,10 +43,7 @@ public final class WorldTuning {
     public static void apply(Plugin plugin, World lobby, Collection<Arena> arenas) {
         int defaultView = plugin.getConfig().getInt("world.view-distance", 5);
         int defaultSimulation = plugin.getConfig().getInt("world.simulation-distance", 4);
-
-        if (defaultView <= 0 && defaultSimulation <= 0) {
-            return;   // 0 = leave the server's own settings alone
-        }
+        boolean locatorBar = plugin.getConfig().getBoolean("world.locator-bar", false);
 
         Map<World, int[]> needed = new HashMap<>();
         needed.put(lobby, new int[]{defaultView, defaultSimulation});
@@ -72,9 +70,33 @@ public final class WorldTuning {
             if (simulation > 0) {
                 world.setSimulationDistance(simulation);
             }
+            hideTheLocatorBar(world, locatorBar);
 
+            // Read BACK, not the value we asked for. setGameRule can refuse, and a log line that
+            // reports our own intent would happily say "off" over a server still broadcasting
+            // every player's position.
             plugin.getLogger().info("World '" + world.getName() + "': view-distance " + view
-                    + ", simulation-distance " + simulation);
+                    + ", simulation-distance " + simulation
+                    + ", locator-bar " + world.getGameRuleValue(GameRule.LOCATOR_BAR));
         }
+    }
+
+    /**
+     * The strip of dots above the hotbar that tells you where every other player is.
+     *
+     * <p>Minecraft added it in 1.21.6 and it is <b>on by default</b>, which quietly hands every
+     * PvP server a wallhack: a Fortress attacker knows exactly where the defenders are standing
+     * inside a fortress they cannot see into, and a duellist tracks an opponent through a pillar.
+     * It has nothing to do with line of sight — waypoints are broadcast across the whole
+     * dimension, far past the view distance, and the server's waypoint manager never consults
+     * Bukkit at all (hiding the <em>entity</em> with {@code hidePlayer} does nothing to the dot).
+     *
+     * <p>So it goes off, in every world the engine owns. The gamerule is the only lever Paper
+     * gives us and it is <b>per world</b>: there is no way to show a player their team-mates and
+     * hide their enemies, because there is no API to filter a waypoint by who is receiving it.
+     * Off for everyone is the only honest answer that does not reach into the server's internals.
+     */
+    private static void hideTheLocatorBar(World world, boolean enabled) {
+        world.setGameRule(GameRule.LOCATOR_BAR, enabled);
     }
 }
