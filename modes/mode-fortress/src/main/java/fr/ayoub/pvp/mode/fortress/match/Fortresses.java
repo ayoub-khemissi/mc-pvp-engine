@@ -51,11 +51,6 @@ public final class Fortresses {
 
                     Block block = context.world().getBlockAt(x + to.x(), y + to.y(), z + to.z());
 
-                    // The engine puts back what PLAYERS change. It cannot see this: we write
-                    // blocks directly, no event fires, and a fortress nobody wrote down would
-                    // still be standing when the next match began.
-                    context.rememberBlock(block.getLocation());
-
                     place(block, blueprint.get(from), blocks);
                 }
             }

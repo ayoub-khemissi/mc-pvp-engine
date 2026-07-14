@@ -6,7 +6,6 @@ import fr.ayoub.pvp.api.MatchHandler;
 import fr.ayoub.pvp.api.MatchOutcome;
 import fr.ayoub.pvp.api.Team;
 import fr.ayoub.pvp.core.arena.Arena;
-import fr.ayoub.pvp.core.arena.ArenaJournal;
 import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.domain.match.MatchState;
 import fr.ayoub.pvp.domain.match.MatchStateMachine;
@@ -49,9 +48,6 @@ public final class Match implements MatchContext {
     private final Series series;
     private final int[] kills;
 
-    /** What this match changed on the map, so the next one starts on the map, not the ruins. */
-    private final ArenaJournal journal;
-
     /** Set by MatchService: how a mode ends its own match. */
     private Consumer<MatchOutcome> finisher = outcome -> { };
 
@@ -64,7 +60,6 @@ public final class Match implements MatchContext {
         this.arena = arena;
         this.teams = List.copyOf(teams);
         this.handler = mode.createHandler();
-        this.journal = new ArenaJournal(arena.world());
         this.series = new Series(mode.rules().rounds(), teams.size());
         this.kills = new int[teams.size()];
         resetAlive();
@@ -101,10 +96,6 @@ public final class Match implements MatchContext {
 
     public Arena arena() {
         return arena;
-    }
-
-    public ArenaJournal journal() {
-        return journal;
     }
 
     public boolean isLive() {
@@ -274,11 +265,6 @@ public final class Match implements MatchContext {
         } else {
             Freeze.release(player);
         }
-    }
-
-    @Override
-    public void rememberBlock(Location location) {
-        journal.remember(location.getBlock());
     }
 
     @Override

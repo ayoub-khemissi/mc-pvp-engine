@@ -3,12 +3,12 @@ package fr.ayoub.pvp.core;
 import fr.ayoub.pvp.api.PvPEngineApi;
 import fr.ayoub.pvp.core.admin.AdminCommand;
 import fr.ayoub.pvp.core.arena.ArenaLoader;
+import fr.ayoub.pvp.core.arena.ArenaResetService;
 import fr.ayoub.pvp.core.arena.ArenaService;
 import fr.ayoub.pvp.core.arena.WallListener;
 import fr.ayoub.pvp.core.lobby.CoreLobby;
 import fr.ayoub.pvp.core.lobby.HotbarItems;
 import fr.ayoub.pvp.core.lobby.LobbyListener;
-import fr.ayoub.pvp.core.arena.RestoreListener;
 import fr.ayoub.pvp.core.lobby.LobbyService;
 import fr.ayoub.pvp.core.match.GameModeRegistry;
 import fr.ayoub.pvp.core.match.MatchListener;
@@ -63,6 +63,7 @@ public final class PvPEnginePlugin extends JavaPlugin {
     private RatingRepository ratingRepository;
 
     private ArenaService arenaService;
+    private ArenaResetService resetService;
     private LobbyService lobbyService;
     private HotbarItems hotbarItems;
     private GameModeRegistry gameModeRegistry;
@@ -129,7 +130,6 @@ public final class PvPEnginePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new LobbyListener(this, lobbyService, hotbarItems), this);
         getServer().getPluginManager().registerEvents(new WallListener(arenaService), this);
         getServer().getPluginManager().registerEvents(new MatchListener(matchService), this);
-        getServer().getPluginManager().registerEvents(new RestoreListener(matchService), this);
 
         AdminCommand admin = new AdminCommand(this, arenaService);
         getCommand("pvpadmin").setExecutor(admin);
@@ -158,6 +158,13 @@ public final class PvPEnginePlugin extends JavaPlugin {
             // decides whether a hundred matches fit on this box: how far each of them is
             // rendered. See WorldTuning.
             WorldTuning.apply(this, lobbyService.spawn().getWorld(), arenaService.all());
+
+            // Photograph every arena that says it can be wrecked — or, if it has been photographed
+            // before, put it back to that photograph before anybody can queue. This is what makes a
+            // server that was KILLED rather than stopped wake up on a clean map instead of on the
+            // wreckage of the match it died in. See ArenaResetService.
+            resetService = new ArenaResetService(this);
+            resetService.prepare(arenaService.all());
         });
 
         getLogger().info("PvP Engine enabled — " + arenaService.all().size() + " map(s).");
@@ -301,6 +308,10 @@ public final class PvPEnginePlugin extends JavaPlugin {
 
     public RatingRepository ratings() {
         return ratingRepository;
+    }
+
+    public ArenaResetService resets() {
+        return resetService;
     }
 
     public ArenaService arenas() {

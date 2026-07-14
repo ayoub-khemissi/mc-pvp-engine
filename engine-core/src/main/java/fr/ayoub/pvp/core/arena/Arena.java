@@ -22,7 +22,8 @@ import java.util.Optional;
  * is for ({@link MapDescriptor}: which modes, which rating band).
  */
 public record Arena(MapDescriptor descriptor, World world, List<Location> spawns,
-                    Region bounds, Map<String, Location> markers, Render render) {
+                    Region bounds, Map<String, Location> markers, Render render,
+                    List<Volume> reset) {
 
     /** How far outside the bounds litter still counts as ours (an arrow in the wall). */
     private static final double LITTER_MARGIN = 3.0;
@@ -47,6 +48,7 @@ public record Arena(MapDescriptor descriptor, World world, List<Location> spawns
     public Arena {
         spawns = List.copyOf(spawns);
         markers = Map.copyOf(markers);
+        reset = List.copyOf(reset);
     }
 
     /**

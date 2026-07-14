@@ -94,9 +94,16 @@ match:
   # heal while you are gone.
   logout-body: true
 
-  # How many blocks an arena restore may put back in a single tick, after a match on a map
-  # people were allowed to dig. Doing it all at once freezes the whole server; see ArenaJournal.
-  restore-blocks-per-tick: 4000
+  # HOW FAST AN ARENA IS PUT BACK between matches.
+  #
+  # Every arena that says it can be wrecked (a 'reset' block in its map.yml) is photographed once
+  # and put back to that photograph after every match — and at boot, which is what repairs a
+  # server that was KILLED rather than stopped. See ArenaResetService.
+  #
+  # The whole volume is COMPARED, but only the blocks that are wrong are written: a match that
+  # dug three holes costs three holes. This is the number of blocks compared per tick, and it is
+  # high because a comparison is nearly free. The arena stays unavailable until it is done.
+  reset-blocks-per-tick: 20000
 
 # Parties: playing with friends.
 #

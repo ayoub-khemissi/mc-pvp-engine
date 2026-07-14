@@ -52,7 +52,7 @@ public final class FortressMapBuilder {
      * with the previous layout's voting plain hanging in the sky over them. Bumping again is what
      * makes a server that already took version 6 throw the world away and generate it clean.
      */
-    public static final int MAP_VERSION = 7;
+    public static final int MAP_VERSION = 8;
 
     /**
      * How far this map is rendered, in chunks. It is written into map.yml and the engine obeys
@@ -571,6 +571,18 @@ public final class FortressMapBuilder {
      * The engine has no idea what "fortress-pad-0" means. It carries the point and hands it
      * back when asked, which is why a new mode never needs a new engine.
      */
+    private static java.util.Map<String, Object> box(int minX, int minY, int minZ,
+                                                     int maxX, int maxY, int maxZ) {
+        java.util.Map<String, Object> box = new java.util.LinkedHashMap<>();
+        box.put("min-x", minX);
+        box.put("min-y", minY);
+        box.put("min-z", minZ);
+        box.put("max-x", maxX);
+        box.put("max-y", maxY);
+        box.put("max-z", maxZ);
+        return box;
+    }
+
     private void writeMapFile(World world, int index) {
         int cube = config.fortressSize();
         int ox = index * SPACING;
@@ -631,6 +643,30 @@ public final class FortressMapBuilder {
         // bounds, so a boundary that stopped at the island would drag a voter out of the vote.
         // Nothing is out there but the two plains: the island itself is walled with barriers.
         yaml.set("bounds.max-z", (double) oz + VOTE_Z_TEAM_1 + 150);
+
+        // WHAT THE ENGINE PUTS BACK BETWEEN MATCHES.
+        //
+        // Not the bounds — those reach a thousand blocks down Z to take in the voting plains, and
+        // photographing eight million blocks of empty sky would be absurd. Only what can actually
+        // be CHANGED: the island, which is dug and blown up and built on, and the two plains,
+        // which have three fortresses pasted onto them and taken off again.
+        //
+        // The engine never learns what any of it is. It photographs these boxes once, on a map
+        // that is whole, and puts them back after every match. A designer's map will say the same
+        // thing in the same place, and the engine will not know the difference.
+        int plainWidth = 3 * cube + 2 * VOTE_GAP;
+        int plainDepth = cube + VOTE_APRON + VOTE_GAP;
+
+        List<java.util.Map<String, Object>> reset = new java.util.ArrayList<>();
+        reset.add(box(ox, BEDROCK_Y, oz, ox + SIZE - 1, SURFACE_Y + 40, oz + SIZE - 1));
+
+        for (int team = 0; team < 2; team++) {
+            int px = votePlainX(ox);
+            int pz = votePlainZ(oz, team);
+            reset.add(box(px - 2, VOTE_Y, pz - 2,
+                    px + plainWidth + 2, VOTE_Y + cube + 4, pz + plainDepth + 2));
+        }
+        yaml.set("reset", reset);
 
         File maps = new File(plugin.getDataFolder().getParentFile(), "PvPEngine/maps");
         maps.mkdirs();

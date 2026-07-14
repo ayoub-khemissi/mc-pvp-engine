@@ -88,7 +88,43 @@ public final class ArenaLoader {
                 yaml.getInt("view-distance", 0),
                 yaml.getInt("simulation-distance", 0));
 
-        return new Arena(descriptor, world, spawns, bounds, markersOf(yaml, world), render);
+        return new Arena(descriptor, world, spawns, bounds, markersOf(yaml, world), render,
+                resetOf(yaml));
+    }
+
+    /**
+     * The 'reset' block: the boxes of the map that a match may wreck, and the engine puts back.
+     *
+     * <pre>
+     * reset:
+     *   - {min-x: 0, min-y: 40, min-z: 0, max-x: 127, max-y: 96, max-z: 127}
+     * </pre>
+     *
+     * <p>Deliberately NOT the bounds. The bounds are the invisible wall — where a player may go —
+     * and in Fortress that reaches a thousand blocks down Z to take in the voting plains, because a
+     * player standing on one must not be dragged back. Photographing that would mean photographing
+     * eight million blocks of empty sky. What must be restored is only what can be CHANGED.
+     *
+     * <p>A map that lists nothing is never reset. That is the right default for a map nobody can
+     * damage, and the wrong one for a map they can — so it is the map that says.
+     */
+    private static List<Volume> resetOf(YamlConfiguration yaml) {
+        List<Volume> volumes = new ArrayList<>();
+
+        for (Map<?, ?> box : yaml.getMapList("reset")) {
+            volumes.add(new Volume(
+                    number(box, "min-x"), number(box, "min-y"), number(box, "min-z"),
+                    number(box, "max-x"), number(box, "max-y"), number(box, "max-z")));
+        }
+        return volumes;
+    }
+
+    private static int number(Map<?, ?> box, String key) {
+        Object value = box.get(key);
+        if (!(value instanceof Number found)) {
+            throw new IllegalArgumentException("a 'reset' box is missing '" + key + "'");
+        }
+        return found.intValue();
     }
 
     /**
