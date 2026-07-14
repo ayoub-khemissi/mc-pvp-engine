@@ -471,7 +471,14 @@ public final class FortressHandler implements MatchHandler {
         hud = Bukkit.getScheduler().runTaskTimer(plugin, this::updateBars, 20L, 20L);
     }
 
-    /** The two things a player needs to know at a glance: the crystals, and the clock. */
+    /**
+     * What a Fortress bar is for: <b>the crystal</b>, and what it cost to get it there.
+     *
+     * <p>It used to end with the clock — on <em>both</em> bars, so the player was told the time
+     * twice, side by side, in the two places their eye already was. The clock is not the mode's
+     * to draw: the engine owns it, starts it, and ends the match on it, and it now shows it once
+     * on the sidebar. A mode's HUD should carry what only the mode knows, and nothing else.
+     */
     private void updateBars() {
         if (context == null) {
             return;
@@ -482,25 +489,27 @@ public final class FortressHandler implements MatchHandler {
             Crystal crystal = crystals.get(team);
 
             String health = crystal == null
-                    ? "no crystal"
+                    ? "destroyed"
                     : crystal.health() + " / " + crystal.maxHealth();
 
-            entry.getValue().name(Component.text("Team " + (team + 1), NamedTextColor.WHITE)
-                    .append(Component.text("  ♦ " + health, NamedTextColor.AQUA))
-                    .append(Component.text("   " + context.kills(team) + " kills",
-                            NamedTextColor.GRAY))
-                    .append(Component.text("   " + clock(), NamedTextColor.YELLOW)));
+            entry.getValue().name(Component.text("TEAM " + (team + 1) + "  ", NamedTextColor.WHITE)
+                    .append(Component.text("♦ " + health, NamedTextColor.AQUA))
+                    .append(Component.text("   ⚔ " + context.kills(team),
+                            NamedTextColor.GRAY)));
 
             entry.getValue().progress(crystal == null ? 0f : crystal.fraction());
         }
     }
 
-    private String clock() {
-        int left = context.secondsLeft();
-        if (left < 0) {
-            return "";
-        }
-        return String.format("%d:%02d", left / 60, left % 60);
+    /**
+     * They dropped out and came back. Their old connection took the boss bars with it — the
+     * Player object those were shown to no longer exists — so they were playing the rest of the
+     * match with no crystal health at all, and no way to know how close they were to losing.
+     */
+    @Override
+    public void onRejoin(MatchContext context, Player player, int team) {
+        bars.values().forEach(player::showBossBar);
+        updateBars();
     }
 
     // --- the end ----------------------------------------------------------------------------

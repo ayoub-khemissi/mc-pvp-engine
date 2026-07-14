@@ -508,6 +508,12 @@ public final class MatchService {
 
         match.handler().onRespawn(match, player, team.get().index());
 
+        // They are a NEW Player object: every boss bar, every title, everything the mode ever
+        // pushed at them went out with the old connection. Only the mode knows what it put on
+        // their screen, so only the mode can put it back — without this they play the rest of
+        // the match with no crystal health, no score and no clock.
+        match.handler().onRejoin(match, player, team.get().index());
+
         // Whatever they were carrying is on the ground where they dropped out — the same deal
         // as dying. Handing it back would make disconnecting a way to protect your gear.
         player.sendMessage(Component.text("You are back in the match.", NamedTextColor.GREEN));

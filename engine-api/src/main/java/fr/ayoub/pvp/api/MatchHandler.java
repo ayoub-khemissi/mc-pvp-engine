@@ -76,6 +76,20 @@ public interface MatchHandler {
         giveKit(context, player, team);
     }
 
+    /**
+     * A player who dropped out has reconnected, and the match is still theirs.
+     *
+     * <p>They are a <b>new Player object</b>. Everything the mode ever pushed at them is gone
+     * with the old connection — a boss bar was shown to a player who no longer exists, and
+     * showing it again is the only way to get it back. The engine cannot do it for you: it does
+     * not know what your mode put on their screen.
+     *
+     * <p>Whatever the match already did to them still stands (the engine has put them back on
+     * their spawn and called {@link #onRespawn}); this is only about what they can <b>see</b>.
+     */
+    default void onRejoin(MatchContext context, Player player, int team) {
+    }
+
     default void onEnd(MatchContext context, MatchOutcome outcome) {
     }
 }
