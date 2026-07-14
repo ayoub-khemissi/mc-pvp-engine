@@ -41,10 +41,22 @@ package fr.ayoub.pvp.api;
  *                         It <b>ends the instant they attack</b>. A player who can hit while they
  *                         cannot be hit has not been given a shield, they have been given seconds
  *                         of free damage: die on purpose, walk into the fight, swing with impunity.
+ * @param roamWhileDead    may a player who is waiting to respawn fly around?
+ *                         <p>
+ *                         In a mode with nothing to hide, a free camera is a nice touch. In one
+ *                         built on <b>hidden information</b> it is a scouting tool: a dead player
+ *                         in SPECTATOR walks through walls, so ten seconds of being dead inside
+ *                         the enemy fortress buys you its whole layout and the spot the crystal is
+ *                         hidden in. Dying became the cheapest way to see inside.
+ *                         <p>
+ *                         {@code false} sends them back to their <b>own</b> spawn and freezes them
+ *                         there — client-side, so nothing rubber-bands (see {@code Freeze}). They
+ *                         can look around; they cannot go anywhere.
  */
 public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
                          boolean building, int respawnSeconds, int setupSeconds,
-                         boolean friendlyFire, boolean dropItems, int spawnProtectionSeconds) {
+                         boolean friendlyFire, boolean dropItems, int spawnProtectionSeconds,
+                         boolean roamWhileDead) {
 
     /**
      * How long the mode may take in {@code onPrepare} before the engine gives up on it.
@@ -80,7 +92,7 @@ public record MatchRules(int rounds, int countdownSeconds, int timeLimitSeconds,
 
     /** Best of 3, no building, no respawn — one lucky hit should not decide a ranked match. */
     public static MatchRules standard() {
-        return new MatchRules(3, 5, 300, false, 0, 10, false, false, 0);
+        return new MatchRules(3, 5, 300, false, 0, 10, false, false, 0, true);
     }
 
     /**

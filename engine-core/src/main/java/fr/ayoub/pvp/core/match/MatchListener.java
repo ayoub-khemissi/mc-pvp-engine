@@ -142,10 +142,19 @@ public final class MatchListener implements Listener {
     public void onMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
 
-        // Never hold a spectator still. They are either dead and watching, or they are being
-        // flown somewhere by their mode — Fortress walks its teams through three fortresses
-        // before the match — and neither is a player who must not move.
         if (player.getGameMode() == GameMode.SPECTATOR) {
+            // A dead player waiting to respawn, in a mode that does not let the dead roam. The
+            // real hold is client-side (fly speed 0, see Freeze); this is the net under it, and
+            // it had better never fire — cancelling a move is what rubber-bands. Without it, one
+            // failed abilities packet and a corpse is touring the enemy fortress.
+            matches.matchOf(player)
+                    .filter(match -> !match.mode().rules().roamWhileDead())
+                    .filter(match -> match.isLive() && !match.isAlive(player))
+                    .ifPresent(match -> {
+                        if (changedBlock(event)) {
+                            event.setCancelled(true);
+                        }
+                    });
             return;
         }
 

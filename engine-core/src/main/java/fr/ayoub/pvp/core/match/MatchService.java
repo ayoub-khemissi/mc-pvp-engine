@@ -441,7 +441,23 @@ public final class MatchService {
         dropEverything(victim, grave);
 
         victim.setGameMode(GameMode.SPECTATOR);
-        victim.teleport(grave);
+
+        // WHERE A DEAD PLAYER WAITS.
+        //
+        // At the grave, they were a free camera standing wherever they fell — and SPECTATOR walks
+        // through walls. Die inside the enemy fortress and the ten seconds you spend dead buy you
+        // its entire layout and the corner the crystal is hidden in. Dying was the cheapest way to
+        // scout, which is not a price, it is a reward.
+        //
+        // So they go home and they stay there. The freeze is the client's own (fly speed 0), not a
+        // move-cancel, so nothing rubber-bands: they can look around, they simply cannot go
+        // anywhere. A mode with nothing to hide says roamWhileDead and keeps its free camera.
+        if (match.mode().rules().roamWhileDead()) {
+            victim.teleport(grave);
+        } else {
+            match.teamOf(victim).ifPresent(team -> victim.teleport(match.spawn(team.index())));
+            Freeze.apply(victim);
+        }
 
         match.broadcast(killer == null
                 ? Component.text(victim.getName() + " died", NamedTextColor.GRAY)
@@ -460,6 +476,7 @@ public final class MatchService {
             match.teamOf(victim).ifPresent(team -> {
                 match.revive(victim.getUniqueId());
 
+                Freeze.release(victim);   // whatever held them while they were dead
                 victim.setGameMode(GameMode.SURVIVAL);
                 victim.teleport(match.spawn(team.index()));
                 victim.setHealth(20);

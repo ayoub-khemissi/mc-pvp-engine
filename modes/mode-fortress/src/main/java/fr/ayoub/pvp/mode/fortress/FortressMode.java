@@ -119,7 +119,8 @@ public final class FortressMode implements GameModeDefinition {
                 config.voteSeconds() + 25,    // the vote runs inside the setup window
                 false,                        // no friendly fire
                 true,                         // and yes, you may throw a teammate your blocks
-                config.spawnProtectionSeconds());
+                config.spawnProtectionSeconds(),
+                false);                       // the dead do not tour the enemy fortress
     }
 
     /** Fortress brings its own screen: it queues, and it sends you to the build zone. */
