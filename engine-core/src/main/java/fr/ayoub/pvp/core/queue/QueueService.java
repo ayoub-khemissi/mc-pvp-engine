@@ -6,6 +6,7 @@ import fr.ayoub.pvp.core.lobby.HotbarItems;
 import fr.ayoub.pvp.core.ui.Sidebar;
 import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.domain.party.Party;
+import fr.ayoub.pvp.domain.queue.GatherRule;
 import fr.ayoub.pvp.domain.queue.Matchmaker;
 import fr.ayoub.pvp.domain.queue.Pairing;
 import fr.ayoub.pvp.domain.queue.RatingWindow;
@@ -249,11 +250,24 @@ public final class QueueService {
 
         for (Map.Entry<String, List<Ticket>> entry : queues.entrySet()) {
             List<Ticket> queue = entry.getValue();
-            Matchmaker matchmaker = matchmakers.get(entry.getKey());
-            if (matchmaker == null || queue.isEmpty()) {
+            if (queue.isEmpty()) {
                 continue;
             }
 
+            // The mode decides the shape of its own queue. A gathering mode (battle royale)
+            // accumulates solos and starts on a threshold and a timer; everything else pairs.
+            GameModeDefinition mode = modeOf(queue);
+            Optional<GatherRule> gather = mode == null ? Optional.empty() : mode.gathering();
+
+            if (gather.isPresent()) {
+                gatherTick(queue, gather.get(), now);
+                continue;
+            }
+
+            Matchmaker matchmaker = matchmakers.get(entry.getKey());
+            if (matchmaker == null) {
+                continue;
+            }
             // Keep forming matches while the queue allows it.
             while (true) {
                 Optional<Pairing> pairing = matchmaker.tryForm(queue, now);
@@ -261,6 +275,53 @@ public final class QueueService {
                     break;
                 }
             }
+        }
+    }
+
+    /** The mode behind a queue, read off any of its tickets. */
+    private GameModeDefinition modeOf(List<Ticket> queue) {
+        Entry entry = byPlayer.get(queue.getFirst().members().getFirst());
+        return entry == null ? null : entry.mode();
+    }
+
+    /**
+     * A gathering queue: accumulate players, and start one big match when the {@link GatherRule}
+     * says so. Every ticket here is a solo (a party cannot queue a 1-per-team format), so each
+     * becomes a team of one — which is exactly a battle royale: N teams of one, last one standing.
+     */
+    private void gatherTick(List<Ticket> queue, GatherRule rule, long now) {
+        int queued = queue.stream().mapToInt(Ticket::size).sum();
+        int oldestWaitSeconds = (int) ((now - queue.getFirst().joinedAtMillis()) / 1000);
+
+        if (!rule.shouldStart(queued, oldestWaitSeconds)) {
+            return;
+        }
+
+        // Take the players who have waited longest, up to the cap. The rest stay for the next one.
+        List<Ticket> taken = new ArrayList<>();
+        int players = 0;
+        for (Ticket ticket : queue) {
+            if (players >= rule.take(queued)) {
+                break;
+            }
+            taken.add(ticket);
+            players += ticket.size();
+        }
+
+        List<List<UUID>> teams = taken.stream().map(Ticket::members).toList();
+
+        int total = taken.stream().mapToInt(t -> t.rating() * t.size()).sum();
+        int averageRating = Math.round((float) total / players);
+
+        Entry any = byPlayer.get(taken.getFirst().members().getFirst());
+        Optional<?> started = plugin.matches().start(any.mode(), any.format(), teams, averageRating);
+        if (started.isEmpty()) {
+            return;   // no free arena — try again next tick, everyone stays queued
+        }
+
+        for (Ticket ticket : taken) {
+            queue.remove(ticket);
+            ticket.members().forEach(byPlayer::remove);
         }
     }
 

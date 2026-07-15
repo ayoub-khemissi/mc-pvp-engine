@@ -1,6 +1,7 @@
 package fr.ayoub.pvp.api;
 
 import fr.ayoub.pvp.domain.match.Format;
+import fr.ayoub.pvp.domain.queue.GatherRule;
 import net.kyori.adventure.text.Component;
 import org.bukkit.inventory.ItemStack;
 
@@ -83,6 +84,19 @@ public interface GameModeDefinition {
      */
     default boolean requiresDedicatedMap() {
         return false;
+    }
+
+    /**
+     * How this mode fills a match.
+     *
+     * <p>Empty — the default — means <b>pairwise</b>: the engine's matchmaker pairs two equal
+     * tickets and starts, which is every duel and every Fortress match. Return a {@link GatherRule}
+     * and the queue instead <b>accumulates</b> solo players into one big match and starts on a
+     * threshold and a timer — the battle royale queue. The engine reads the rule; it never learns
+     * which mode is a battle royale.
+     */
+    default java.util.Optional<GatherRule> gathering() {
+        return java.util.Optional.empty();
     }
 
     MatchRules rules();
