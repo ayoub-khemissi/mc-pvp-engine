@@ -306,6 +306,13 @@ public final class MatchService {
                 return;
             }
 
+            // That death may have wiped a team out for good. Record where they finished, before
+            // anything else eliminates another team — placement is decided at the instant of the
+            // wipeout, not at the end. (A no-op for a respawn mode, which returned above.)
+            match.teamOf(victim)
+                    .filter(team -> !match.isTeamAlive(team.index()))
+                    .ifPresent(team -> match.recordTeamWipeout(team.index()));
+
             makeSpectator(victim, match);
             match.broadcast(Component.text(victim.getName(), NamedTextColor.RED)
                     .append(Component.text(" was eliminated", NamedTextColor.GRAY)));

@@ -99,6 +99,32 @@ public interface GameModeDefinition {
         return java.util.Optional.empty();
     }
 
+    /**
+     * How a win moves the ladder.
+     *
+     * <p>{@link RatingStyle#PAIRWISE} — the default — is two sides, win or lose: every duel, every
+     * Fortress match. {@link RatingStyle#PLACEMENT} rates by finishing position over the whole
+     * field, which is the only thing that makes sense when there is no "other team", just 24 people
+     * and the order they went out. The engine owns the ratings either way; this only says how to
+     * turn the result into a number.
+     */
+    default RatingStyle ratingStyle() {
+        return RatingStyle.PAIRWISE;
+    }
+
+    /** How the ladder reads a match result. */
+    enum RatingStyle {
+        /** Two sides, win/loss/draw, compared by average rating. */
+        PAIRWISE,
+        /** A finishing order over the whole field, plus a bonus per kill. */
+        PLACEMENT
+    }
+
+    /** For {@link RatingStyle#PLACEMENT}: rating awarded per kill, on top of the placement Elo. */
+    default int placementKillBonus() {
+        return 0;
+    }
+
     MatchRules rules();
 
     /** A fresh handler for each match. */

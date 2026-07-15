@@ -9,6 +9,7 @@ import fr.ayoub.pvp.core.arena.Arena;
 import fr.ayoub.pvp.domain.match.Format;
 import fr.ayoub.pvp.domain.match.MatchState;
 import fr.ayoub.pvp.domain.match.MatchStateMachine;
+import fr.ayoub.pvp.domain.br.PlacementBoard;
 import fr.ayoub.pvp.domain.match.Series;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.title.Title;
@@ -48,6 +49,9 @@ public final class Match implements MatchContext {
     private final Series series;
     private final int[] kills;
 
+    /** Where each team finished, from the order they were wiped out. Used by placement rating. */
+    private final PlacementBoard placements;
+
     /** Set by MatchService: how a mode ends its own match. */
     private Consumer<MatchOutcome> finisher = outcome -> { };
 
@@ -62,6 +66,7 @@ public final class Match implements MatchContext {
         this.handler = mode.createHandler();
         this.series = new Series(mode.rules().rounds(), teams.size());
         this.kills = new int[teams.size()];
+        this.placements = new PlacementBoard(teams.size());
         resetAlive();
     }
 
@@ -222,6 +227,22 @@ public final class Match implements MatchContext {
 
     public void eliminate(UUID player) {
         alive.remove(player);
+    }
+
+    /** Any member of this team still alive in the current round? */
+    public boolean isTeamAlive(int team) {
+        return teams.get(team).members().stream().anyMatch(alive::contains);
+    }
+
+    /** This team is wiped out — record where it finished (see PlacementBoard). */
+    public void recordTeamWipeout(int team) {
+        placements.eliminate(team);
+    }
+
+    /** Where a team finished, 1 = winner. Meaningful for a no-respawn, single-round mode. */
+    @Override
+    public int placement(int team) {
+        return placements.placementOf(team);
     }
 
     public Optional<Team> teamOf(UUID player) {

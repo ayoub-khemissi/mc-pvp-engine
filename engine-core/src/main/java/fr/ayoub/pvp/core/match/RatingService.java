@@ -1,8 +1,10 @@
 package fr.ayoub.pvp.core.match;
 
+import fr.ayoub.pvp.api.GameModeDefinition;
 import fr.ayoub.pvp.api.MatchOutcome;
 import fr.ayoub.pvp.api.Team;
 import fr.ayoub.pvp.core.PvPEnginePlugin;
+import fr.ayoub.pvp.domain.br.BattleRoyaleRating;
 import fr.ayoub.pvp.domain.rating.Division;
 import fr.ayoub.pvp.domain.rating.DivisionLadder;
 import fr.ayoub.pvp.domain.rating.EloCalculator;
@@ -58,6 +60,12 @@ public final class RatingService {
             return;
         }
 
+        // A battle royale has no "other team" — it has a finishing order. Score it by placement.
+        if (match.mode().ratingStyle() == GameModeDefinition.RatingStyle.PLACEMENT) {
+            applyPlacement(match);
+            return;
+        }
+
         String modeId = match.mode().id();
         String format = match.format().id();
         List<Team> teams = match.teams();
@@ -104,6 +112,63 @@ public final class RatingService {
             }
 
             // 4. Tell the players, back on the main thread.
+            Bukkit.getScheduler().runTask(plugin, () -> announce(changes));
+        });
+    }
+
+    /**
+     * Rate a battle royale by finishing order.
+     *
+     * <p>Everyone's placement is read off the match (worked out from the elimination order) and
+     * their kills from the scoreboard, and {@link BattleRoyaleRating} turns the whole field into
+     * rating changes at once — reusing the same Elo maths as a duel, just resolved as every
+     * pairwise comparison the placement implies. A solo team is one player, so each team maps to
+     * one standing; a squad's members would share their team's placement and kills.
+     */
+    private void applyPlacement(Match match) {
+        String modeId = match.mode().id();
+        String format = match.format().id();
+        int killBonus = match.mode().placementKillBonus();
+        List<Team> teams = match.teams();
+
+        plugin.async().execute(() -> {
+            Map<UUID, PlayerRating> before = new HashMap<>();
+            for (Team team : teams) {
+                for (UUID id : team.members()) {
+                    before.put(id, plugin.ratings()
+                            .find(id, modeId, format)
+                            .map(RatingRow::toDomain)
+                            .orElse(PlayerRating.initial(PvPEnginePlugin.STARTING_RATING)));
+                }
+            }
+
+            // One standing per player, in a stable order so the results line up with it.
+            List<UUID> order = new ArrayList<>();
+            List<BattleRoyaleRating.Standing> field = new ArrayList<>();
+            for (Team team : teams) {
+                for (UUID id : team.members()) {
+                    order.add(id);
+                    field.add(new BattleRoyaleRating.Standing(
+                            before.get(id).toSnapshot(),
+                            match.placement(team.index()),
+                            match.kills(team.index())));
+                }
+            }
+
+            List<RatingChange> results =
+                    BattleRoyaleRating.compute(field, KFactor.standard(), killBonus);
+
+            Map<UUID, RatingChange> changes = new HashMap<>();
+            for (int i = 0; i < order.size(); i++) {
+                UUID id = order.get(i);
+                RatingChange change = results.get(i);
+                Outcome asResult = change.delta() >= 0 ? Outcome.WIN : Outcome.LOSS;   // for the record
+                PlayerRating updated = RatingUpdater.apply(before.get(id), change.after(), asResult);
+
+                plugin.ratings().save(id, modeId, format, RatingRow.of(updated));
+                changes.put(id, change);
+            }
+
             Bukkit.getScheduler().runTask(plugin, () -> announce(changes));
         });
     }

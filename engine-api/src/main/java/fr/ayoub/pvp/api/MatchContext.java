@@ -88,6 +88,16 @@ public interface MatchContext {
     /** How many kills a team has. The engine counts them; a mode decides what they are worth. */
     int kills(int team);
 
+    /**
+     * Where a team is currently placed, 1 being the winner.
+     *
+     * <p>Only meaningful for a mode where elimination is permanent (no respawn, one round) — a
+     * battle royale. It is the team's finishing position among all the teams, worked out from the
+     * order they were wiped out, and it is what a "you placed #7" message or a placement rating
+     * reads. In a respawn mode it has no meaning and should be ignored.
+     */
+    int placement(int team);
+
     /** Seconds left on the clock, or -1 when the mode set no time limit. */
     int secondsLeft();
 
