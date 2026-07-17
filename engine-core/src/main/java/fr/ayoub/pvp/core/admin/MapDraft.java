@@ -1,5 +1,7 @@
 package fr.ayoub.pvp.core.admin;
 
+import fr.ayoub.pvp.domain.arena.CardinalFacing;
+import fr.ayoub.pvp.domain.arena.SpawnCoherence;
 import org.bukkit.Location;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -13,21 +15,22 @@ import java.util.Map;
 /**
  * A map being defined in-game, one marker at a time, before it is written to a {@code map.yml}.
  *
- * <p>A third-party arena — a Chunkity duel arena, a designer's build — arrives as blocks in a world
- * with none of the engine's markers on it: no team spawns, no bounds. Rather than guess coordinates,
- * an admin flies into the arena and stamps them: stand where a fighter should appear and add a
- * spawn, stand at two opposite corners and mark the bounds. This holds those stamps until they are
- * saved, and then writes exactly the {@code map.yml} the engine already reads.
+ * <p>A third-party arena arrives as blocks in a world with none of the engine's markers on it — no
+ * team spawns, no bounds. The admin flies in and stamps them; this holds the stamps until they are
+ * saved, then writes exactly the {@code map.yml} the engine reads.
  *
- * <p>Each team gets <b>several</b> spawns, added one at a time — enough for the biggest format the
- * arena will host, so a 3v3 does not stack three fighters on one block. One spawn per team is the
- * minimum; add more for 2v2 and 3v3.
+ * <p><b>Spawns are cleaned as they are added:</b> centred on the block (x.5 / z.5, so a fighter is
+ * not wedged in a corner) and their look snapped to a straight direction (0/90/180/270, so two
+ * fighters actually face each other). Each team gets several — enough for the biggest format the
+ * arena hosts, so a 3v3 does not stack three people on one block.
  *
  * <p>The two corners double as the <b>reset volume</b>: the box is both the invisible wall and the
- * region the engine photographs and restores between matches. One box, two jobs — which is why a
- * decaying leaf or a dug-out floor never survives into the next duel.
+ * region the engine photographs and restores between matches.
  */
 public final class MapDraft {
+
+    /** How close you must stand to an existing spawn for a second click to remove it. */
+    private static final double TOGGLE_RADIUS = 1.5;
 
     private final String id;
     private final String world;
@@ -51,23 +54,82 @@ public final class MapDraft {
         return world;
     }
 
-    /** Add a spawn to a team. Returns how many that team now has. */
+    private List<Location> team(int team) {
+        return team == 0 ? team0 : team1;
+    }
+
+    /**
+     * Add a spawn, centred on the block and facing a straight direction. Returns how many that team
+     * now has. Standing within {@link #TOGGLE_RADIUS} of one you already placed removes it instead —
+     * so a second click where you stand is an "undo", which is what {@link #toggleSpawn} does.
+     */
     public int addSpawn(int team, Location at) {
-        List<Location> spawns = team == 0 ? team0 : team1;
-        spawns.add(at.clone());
-        return spawns.size();
+        Location clean = at.clone();
+        clean.setX(clean.getBlockX() + 0.5);
+        clean.setZ(clean.getBlockZ() + 0.5);
+        clean.setY(clean.getBlockY());
+        clean.setYaw(CardinalFacing.snap(clean.getYaw()));
+        clean.setPitch(0);
+        team(team).add(clean);
+        return team(team).size();
+    }
+
+    /**
+     * Click near a spawn you placed → remove it; click on open ground → add one.
+     *
+     * @return {@code +n} when a spawn was added (the new count), {@code -n} when one was removed
+     */
+    public int toggleSpawn(int teamIndex, Location at) {
+        List<Location> spawns = team(teamIndex);
+        for (int i = 0; i < spawns.size(); i++) {
+            if (near(spawns.get(i), at)) {
+                spawns.remove(i);
+                return -spawns.size();
+            }
+        }
+        return addSpawn(teamIndex, at);
+    }
+
+    private static boolean near(Location a, Location b) {
+        return a.getWorld().equals(b.getWorld())
+                && a.distanceSquared(new Location(b.getWorld(),
+                        b.getBlockX() + 0.5, b.getBlockY(), b.getBlockZ() + 0.5))
+                    <= TOGGLE_RADIUS * TOGGLE_RADIUS;
     }
 
     public void clearSpawns(int team) {
-        (team == 0 ? team0 : team1).clear();
+        team(team).clear();
     }
 
-    public void setCorner(int which, Location at) {
+    public List<Location> spawns(int team) {
+        return List.copyOf(team(team));
+    }
+
+    /** Set a corner, or clear it if it is already at the block you are standing on. */
+    public void toggleCorner(int which, Location at) {
+        Location existing = which == 1 ? corner1 : corner2;
+        boolean sameBlock = existing != null
+                && existing.getBlockX() == at.getBlockX()
+                && existing.getBlockY() == at.getBlockY()
+                && existing.getBlockZ() == at.getBlockZ();
+
+        Location value = sameBlock ? null : at.clone();
         if (which == 1) {
-            corner1 = at.clone();
+            corner1 = value;
         } else {
-            corner2 = at.clone();
+            corner2 = value;
         }
+    }
+
+    public Location corner(int which) {
+        return which == 1 ? corner1 : corner2;
+    }
+
+    public void clearAll() {
+        team0.clear();
+        team1.clear();
+        corner1 = null;
+        corner2 = null;
     }
 
     public void setModes(List<String> ids) {
@@ -75,14 +137,14 @@ public final class MapDraft {
         modes.addAll(ids);
     }
 
-    /** What is still missing, in words, so the admin knows what to stamp next. Empty when ready. */
+    /** What is still missing, in words. Empty when the map has everything it needs. */
     public List<String> missing() {
         List<String> missing = new ArrayList<>();
         if (team0.isEmpty()) {
-            missing.add("at least one spawn for team 0");
+            missing.add("a spawn for team 0");
         }
         if (team1.isEmpty()) {
-            missing.add("at least one spawn for team 1");
+            missing.add("a spawn for team 1");
         }
         if (corner1 == null) {
             missing.add("corner 1");
@@ -93,18 +155,43 @@ public final class MapDraft {
         return missing;
     }
 
+    /**
+     * Problems that do not block saving but the admin should see — chiefly whether the two teams
+     * actually face each other (see {@link SpawnCoherence}), and whether the bounds are a real box
+     * rather than a flat slab, which is the mistake that ships a broken arena.
+     */
+    public List<String> warnings() {
+        List<String> warnings = new ArrayList<>(SpawnCoherence.check(yaws(team0), yaws(team1)));
+
+        if (corner1 != null && corner2 != null) {
+            int h = Math.abs(corner1.getBlockY() - corner2.getBlockY()) + 1;
+            int w = Math.abs(corner1.getBlockX() - corner2.getBlockX()) + 1;
+            int d = Math.abs(corner1.getBlockZ() - corner2.getBlockZ()) + 1;
+            if (h < 5 || w < 5 || d < 5) {
+                warnings.add("the bounds are very thin (" + w + "x" + h + "x" + d
+                        + ") — corner 2 should be high above the arena, not next to corner 1");
+            }
+        }
+        return warnings;
+    }
+
+    private static List<Float> yaws(List<Location> spawns) {
+        return spawns.stream().map(Location::getYaw).toList();
+    }
+
     public boolean isReady() {
         return missing().isEmpty();
     }
 
-    /** How many spawns each team has, e.g. "team 0: 3, team 1: 3" — supports up to 3v3 here. */
-    public String spawnCounts() {
-        return "team 0: " + team0.size() + ", team 1: " + team1.size();
+    public String status() {
+        return "team 0: " + team0.size() + " spawn(s), team 1: " + team1.size()
+                + " spawn(s), corner 1 " + (corner1 != null ? "set" : "—")
+                + ", corner 2 " + (corner2 != null ? "set" : "—");
     }
 
     /**
-     * Write the {@code map.yml}. The bounds are a cuboid spanning the two corners, and the same box
-     * is written as the reset volume, so the arena is put back between matches.
+     * Write the {@code map.yml}. Bounds are a cuboid spanning the two corners, and the same box is
+     * written as the reset volume so the arena is put back between matches.
      */
     public void save(File mapsFolder) throws IOException {
         YamlConfiguration yaml = new YamlConfiguration();

@@ -100,22 +100,12 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
                 + ". (config.yml still decides on restart.)", NamedTextColor.GREEN);
     }
 
-    /** Maps being defined right now, one per admin. */
-    private final java.util.Map<java.util.UUID, MapDraft> drafts = new java.util.HashMap<>();
-
     /**
-     * Turn a hand-made arena into a playable map by stamping its markers in game.
+     * Turn a hand-made arena into a playable map — with items, not commands.
      *
-     *   /pvpadmin map new &lt;id&gt;       start a map in the world you are standing in
-     *   /pvpadmin map spawn &lt;0|1&gt;    set a team's spawn at your feet, facing where you look
-     *   /pvpadmin map corner &lt;1|2&gt;   set a bounds corner at your position
-     *   /pvpadmin map modes &lt;a,b&gt;    which modes may play here (default: duel)
-     *   /pvpadmin map info            what is still missing
-     *   /pvpadmin map save            write the map.yml and load it as an arena
-     *   /pvpadmin map cancel          throw the draft away
-     *
-     * The two corners are both the invisible wall AND the box the engine resets between matches,
-     * so an arena you define this way is decay-proof for free.
+     * <p>{@code /pvpadmin map edit <id>} drops you into the {@link MapEditor}: a hotbar of tools,
+     * right-click to place a marker where you stand, right-click a placed marker to take it back.
+     * Spawns are centred and their look snapped straight; the whole layout is drawn in particles.
      */
     private void map(CommandSender sender, String[] args) {
         if (!(sender instanceof Player player)) {
@@ -123,102 +113,22 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
             return;
         }
         if (args.length < 2) {
-            send(sender, "Usage: /pvpadmin map new|spawn|corner|modes|info|save|cancel",
+            send(sender, "Usage: /pvpadmin map edit <id>   (then use the hotbar tools)",
                     NamedTextColor.RED);
             return;
         }
 
-        java.util.UUID who = player.getUniqueId();
-
-        switch (args[1].toLowerCase()) {
-            case "new" -> {
-                if (args.length < 3) {
-                    send(sender, "Usage: /pvpadmin map new <id>", NamedTextColor.RED);
-                    return;
-                }
-                drafts.put(who, new MapDraft(args[2], player.getWorld().getName()));
-                send(sender, "Started map '" + args[2] + "' in world '"
-                        + player.getWorld().getName() + "'. Now mark: spawn 0, spawn 1, corner 1,"
-                        + " corner 2.", NamedTextColor.GREEN);
+        // An item-based editor, not a wall of commands: /pvpadmin map edit <id>, then the hotbar.
+        if (args[1].equalsIgnoreCase("edit")) {
+            if (args.length < 3) {
+                send(sender, "Usage: /pvpadmin map edit <id>", NamedTextColor.RED);
+                return;
             }
-            case "spawn" -> withDraft(player, draft -> {
-                int team = args.length > 2 && args[2].equals("1") ? 1 : 0;
-                int n = draft.addSpawn(team, player.getLocation());
-                send(sender, "Added spawn #" + n + " for team " + team + " (facing "
-                        + facing(player) + "). Add more for 2v2/3v3, or the other team. "
-                        + remaining(draft), NamedTextColor.GREEN);
-            });
-            case "clearspawns" -> withDraft(player, draft -> {
-                int team = args.length > 2 && args[2].equals("1") ? 1 : 0;
-                draft.clearSpawns(team);
-                send(sender, "Cleared team " + team + "'s spawns. " + remaining(draft),
-                        NamedTextColor.YELLOW);
-            });
-            case "corner" -> withDraft(player, draft -> {
-                int which = args.length > 2 && args[2].equals("2") ? 2 : 1;
-                draft.setCorner(which, player.getLocation());
-                send(sender, "Corner " + which + " set at " + coords(player.getLocation())
-                        + ". " + remaining(draft), NamedTextColor.GREEN);
-            });
-            case "modes" -> withDraft(player, draft -> {
-                if (args.length < 3) {
-                    send(sender, "Usage: /pvpadmin map modes <id,id>", NamedTextColor.RED);
-                    return;
-                }
-                draft.setModes(java.util.List.of(args[2].split(",")));
-                send(sender, "Modes set: " + args[2], NamedTextColor.GREEN);
-            });
-            case "info" -> withDraft(player, draft ->
-                    send(sender, "Map '" + draft.id() + "': " + remaining(draft), NamedTextColor.GOLD));
-            case "cancel" -> {
-                drafts.remove(who);
-                send(sender, "Draft thrown away.", NamedTextColor.YELLOW);
-            }
-            case "save" -> withDraft(player, draft -> saveDraft(sender, who, draft));
-            default -> send(sender, "Usage: /pvpadmin map new|spawn|corner|modes|info|save|cancel",
-                    NamedTextColor.RED);
-        }
-    }
-
-    private void withDraft(Player player, java.util.function.Consumer<MapDraft> action) {
-        MapDraft draft = drafts.get(player.getUniqueId());
-        if (draft == null) {
-            send(player, "No map in progress. Start one: /pvpadmin map new <id>", NamedTextColor.RED);
-            return;
-        }
-        action.accept(draft);
-    }
-
-    private void saveDraft(CommandSender sender, java.util.UUID who, MapDraft draft) {
-        if (!draft.isReady()) {
-            send(sender, "Not yet — still need: " + String.join(", ", draft.missing()),
-                    NamedTextColor.RED);
-            return;
-        }
-        try {
-            draft.save(new java.io.File(plugin.getDataFolder(), "maps"));
-        } catch (java.io.IOException e) {
-            send(sender, "Could not write the map file: " + e.getMessage(), NamedTextColor.RED);
+            plugin.mapEditor().start(player, args[2]);
             return;
         }
 
-        drafts.remove(who);
-        arenas.load(ArenaLoader.loadAll(plugin));
-        plugin.resets().prepare(arenas.all());   // photograph the new arena for future resets
-
-        send(sender, "Saved '" + draft.id() + "' and loaded it. Queue a duel to test it.",
-                NamedTextColor.GREEN);
-    }
-
-    private static String remaining(MapDraft draft) {
-        return draft.isReady()
-                ? "Ready — /pvpadmin map save."
-                : "Still need: " + String.join(", ", draft.missing()) + ".";
-    }
-
-    private static String facing(Player player) {
-        float yaw = player.getLocation().getYaw();
-        return String.format("yaw %.0f", yaw);
+        send(sender, "Usage: /pvpadmin map edit <id>   (then use the hotbar tools)", NamedTextColor.RED);
     }
 
     /**
@@ -400,6 +310,7 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
             out.add("setup");
             out.add("arena");
             out.add("mode");
+            out.add("map");
             out.add("world");
             out.add("reload");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("arena")) {
@@ -410,6 +321,8 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
             out.add("list");
             out.add("enable");
             out.add("disable");
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("map")) {
+            out.add("edit");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("world")) {
             out.add("load");
             out.add("tp");
