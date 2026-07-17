@@ -2,6 +2,7 @@ package fr.ayoub.pvp.core;
 
 import fr.ayoub.pvp.api.PvPEngineApi;
 import fr.ayoub.pvp.core.admin.AdminCommand;
+import fr.ayoub.pvp.core.admin.ArenaStamper;
 import fr.ayoub.pvp.core.admin.MapEditor;
 import fr.ayoub.pvp.core.arena.ArenaLoader;
 import fr.ayoub.pvp.core.arena.ArenaResetService;
@@ -70,6 +71,7 @@ public final class PvPEnginePlugin extends JavaPlugin {
     private GameModeRegistry gameModeRegistry;
     private MatchService matchService;
     private MapEditor mapEditor;
+    private ArenaStamper arenaStamper;
     private QueueService queueService;
     private PartyService partyService;
 
@@ -135,6 +137,9 @@ public final class PvPEnginePlugin extends JavaPlugin {
 
         mapEditor = new MapEditor(this);
         getServer().getPluginManager().registerEvents(mapEditor, this);
+
+        arenaStamper = new ArenaStamper(this);
+        getServer().getPluginManager().registerEvents(arenaStamper, this);
 
         AdminCommand admin = new AdminCommand(this, arenaService);
         getCommand("pvpadmin").setExecutor(admin);
@@ -323,6 +328,10 @@ public final class PvPEnginePlugin extends JavaPlugin {
 
     public MapEditor mapEditor() {
         return mapEditor;
+    }
+
+    public ArenaStamper arenaStamper() {
+        return arenaStamper;
     }
 
     /**

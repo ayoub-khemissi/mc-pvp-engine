@@ -287,7 +287,28 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
                 plugin.lobby().send(player);
                 send(sender, "Back to the lobby.", NamedTextColor.GREEN);
             }
+            case "stamp" -> {
+                if (!(sender instanceof Player player)) {
+                    send(sender, "Only a player can hold the wand.", NamedTextColor.RED);
+                    return;
+                }
+                if (args.length < 3) {
+                    send(sender, "Usage: /pvpadmin arena stamp <id> [radius] [lift]", NamedTextColor.RED);
+                    return;
+                }
+                Integer radius = args.length > 3 ? tryInt(args[3]) : null;
+                Integer lift = args.length > 4 ? tryInt(args[4]) : null;
+                plugin.arenaStamper().give(player, args[2], radius, lift);
+            }
             default -> usage(sender);
+        }
+    }
+
+    private static Integer tryInt(String s) {
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 
@@ -315,6 +336,7 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
             out.add("list");
             out.add("tp");
             out.add("leave");
+            out.add("stamp");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("mode")) {
             out.add("list");
             out.add("enable");
