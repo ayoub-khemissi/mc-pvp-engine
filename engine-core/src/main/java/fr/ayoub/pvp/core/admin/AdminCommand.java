@@ -299,6 +299,22 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
                 Integer lift = args.length > 3 ? tryInt(args[3]) : null;
                 plugin.arenaStamper().give(player, args[2], lift);
             }
+            case "remove" -> {
+                if (args.length < 3) {
+                    send(sender, "Usage: /pvpadmin arena remove <id>", NamedTextColor.RED);
+                    return;
+                }
+                java.io.File file = new java.io.File(plugin.getDataFolder(), "maps/" + args[2] + ".yml");
+                if (!file.exists()) {
+                    send(sender, "No map file for '" + args[2] + "'.", NamedTextColor.RED);
+                    return;
+                }
+                ArenaStamp.clearFromMapFile(file);   // wipe its blocks, barriers and all
+                file.delete();
+                arenas.load(ArenaLoader.loadAll(plugin));
+                send(sender, "Removed '" + args[2] + "' — blocks cleared and unregistered.",
+                        NamedTextColor.GREEN);
+            }
             default -> usage(sender);
         }
     }
@@ -336,6 +352,7 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
             out.add("tp");
             out.add("leave");
             out.add("stamp");
+            out.add("remove");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("mode")) {
             out.add("list");
             out.add("enable");

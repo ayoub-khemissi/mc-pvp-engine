@@ -37,6 +37,11 @@ public final class ArenaStamp {
      */
     public static void stamp(World world, int cx, int floorY, int cz,
                              String id, List<String> modes, File mapsFolder) throws IOException {
+        // Re-stamping the same id must not leave the old arena's blocks — above all its invisible
+        // barrier walls — floating where the new one no longer covers them. Clear the old volume,
+        // wherever it was, before anything else.
+        clearFromMapFile(new File(mapsFolder, id + ".yml"));
+
         int r = WorldSetup.ARENA_FLOOR_RADIUS;
         int pad = WorldSetup.TEAM_PAD_OFFSET;
         int height = WorldSetup.ARENA_CEILING - WorldSetup.ARENA_Y;
@@ -85,6 +90,30 @@ public final class ArenaStamp {
 
         mapsFolder.mkdirs();
         yaml.save(new File(mapsFolder, id + ".yml"));
+    }
+
+    /**
+     * Clear the blocks of the arena a {@code map.yml} describes — its whole reset volume, barrier
+     * walls and all. Used to wipe a stamped arena before it is re-stamped or removed. Does nothing
+     * if the file, or the world it names, is not there.
+     */
+    public static void clearFromMapFile(File yaml) {
+        if (!yaml.exists()) {
+            return;
+        }
+        YamlConfiguration map = YamlConfiguration.loadConfiguration(yaml);
+        World world = org.bukkit.Bukkit.getWorld(map.getString("world", ""));
+        if (world == null) {
+            return;
+        }
+        for (Map<?, ?> box : map.getMapList("reset")) {
+            clear(world, num(box, "min-x"), num(box, "min-y"), num(box, "min-z"),
+                    num(box, "max-x"), num(box, "max-y"), num(box, "max-z"));
+        }
+    }
+
+    private static int num(Map<?, ?> box, String key) {
+        return box.get(key) instanceof Number n ? n.intValue() : 0;
     }
 
     /** Empty a box to air, so the arena is built into a clean pocket rather than through decor. */
