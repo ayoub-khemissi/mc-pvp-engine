@@ -157,16 +157,14 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
         if (args[1].equalsIgnoreCase("load")) {
             if (Bukkit.getWorld(name) != null) {
                 send(sender, "'" + name + "' is already loaded.", NamedTextColor.YELLOW);
-            } else if (!new java.io.File(Bukkit.getWorldContainer(), name).isDirectory()) {
-                send(sender, "No world folder called '" + name + "' next to the server jar.",
-                        NamedTextColor.RED);
-                return;
             } else {
                 send(sender, "Loading '" + name + "' — a hand-made world may be upgraded from an "
                         + "older version, which can take a moment…", NamedTextColor.GRAY);
-                World created = new org.bukkit.WorldCreator(name).createWorld();
-                if (created == null) {
-                    send(sender, "Could not load '" + name + "'. See the console.", NamedTextColor.RED);
+                // Dimensions-aware: finds the world whether it is a freshly-dropped top-level folder
+                // or one Paper already migrated under world/dimensions/. See loadWorldByName.
+                if (plugin.loadWorldByName(name) == null) {
+                    send(sender, "No world folder called '" + name + "' (looked at the top level and "
+                            + "under world/dimensions/). See the console.", NamedTextColor.RED);
                     return;
                 }
             }

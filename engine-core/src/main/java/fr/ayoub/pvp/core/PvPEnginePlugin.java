@@ -156,6 +156,12 @@ public final class PvPEnginePlugin extends JavaPlugin {
         // own map is invisible until the next restart, and the mode looks broken on the very
         // first boot.
         Bukkit.getScheduler().runTask(this, () -> {
+            // A hand-made arena lives in its own world (elarion, the Chunkity arenas), and Paper
+            // only auto-loads the main world and our mode worlds. So load any world a map.yml names
+            // before reading the maps — otherwise the map is skipped for "world not loaded" and the
+            // admin has to load it by hand after every restart.
+            autoLoadMapWorlds();
+
             arenaService.load(ArenaLoader.loadAll(this));
             getLogger().info("Maps loaded: " + arenaService.all().size());
 
@@ -317,6 +323,57 @@ public final class PvPEnginePlugin extends JavaPlugin {
 
     public MapEditor mapEditor() {
         return mapEditor;
+    }
+
+    /**
+     * Load a world by name if its folder is there — wherever "there" is.
+     *
+     * <p>Paper 26.x keeps extra worlds under {@code world/dimensions/minecraft/<name>/}, but a world
+     * you have just dropped in sits at the top level until Paper migrates it on first load. So both
+     * places are checked; either counts. Returns the world, or null if there is no folder to load.
+     */
+    public World loadWorldByName(String name) {
+        World loaded = Bukkit.getWorld(name);
+        if (loaded != null) {
+            return loaded;
+        }
+
+        java.io.File topLevel = new java.io.File(getServer().getWorldContainer(), name);
+        java.io.File migrated = new java.io.File(
+                getServer().getWorldContainer(), "world/dimensions/minecraft/" + name);
+        if (!topLevel.isDirectory() && !migrated.isDirectory()) {
+            return null;
+        }
+        return new WorldCreator(name).createWorld();
+    }
+
+    /** Load every world a {@code map.yml} references, so the maps are not skipped at boot. */
+    private void autoLoadMapWorlds() {
+        java.io.File maps = new java.io.File(getDataFolder(), "maps");
+        java.io.File[] files = maps.listFiles((dir, n) -> n.endsWith(".yml"));
+        if (files == null) {
+            return;
+        }
+
+        java.util.Set<String> wanted = new java.util.HashSet<>();
+        for (java.io.File file : files) {
+            String world = org.bukkit.configuration.file.YamlConfiguration
+                    .loadConfiguration(file).getString("world");
+            if (world != null) {
+                wanted.add(world);
+            }
+        }
+
+        for (String name : wanted) {
+            if (Bukkit.getWorld(name) != null) {
+                continue;
+            }
+            if (loadWorldByName(name) != null) {
+                getLogger().info("Loaded map world '" + name + "'.");
+            } else {
+                getLogger().warning("A map wants world '" + name + "' but its folder is missing.");
+            }
+        }
     }
 
     public ArenaResetService resets() {
