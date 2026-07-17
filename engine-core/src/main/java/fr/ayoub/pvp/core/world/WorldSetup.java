@@ -244,7 +244,12 @@ public final class WorldSetup {
                 cx - r - 4, ARENA_Y - 8, -r - 4,
                 cx + r + 4, ARENA_Y + WALL_HEIGHT + 10, r + 4);
 
-        buildArena(world, cx, ARENA_Y, 0);
+        buildArena(world, cx, ARENA_Y, 0, true);
+    }
+
+    /** With the floating island — for the void grid, where a floor needs something under it. */
+    public static void buildArena(World world, int cx, int floorY, int cz) {
+        buildArena(world, cx, floorY, cz, true);
     }
 
     /**
@@ -256,14 +261,17 @@ public final class WorldSetup {
      * detailed floor to fight on. The centre floor is at {@code floorY}; the team pads sit at
      * {@link #TEAM_PAD_OFFSET} either side of it, which is where the spawns go.
      */
-    public static void buildArena(World world, int cx, int floorY, int cz) {
+    public static void buildArena(World world, int cx, int floorY, int cz, boolean withIsland) {
         int r = ARENA_FLOOR_RADIUS;
 
-        // Floating island underneath.
-        disc(world, cx, floorY - 1, cz, r - 1, ROCK);
-        disc(world, cx, floorY - 2, cz, r - 4, ROCK);
-        disc(world, cx, floorY - 3, cz, r - 8, DEEP_ROCK);
-        disc(world, cx, floorY - 4, cz, r - 13, DEEP_ROCK);
+        // Floating island underneath — only where the arena hangs in the void. Stamped into a
+        // carved pocket in someone's decor it just dangles as a detached blob, so it is skipped.
+        if (withIsland) {
+            disc(world, cx, floorY - 1, cz, r - 1, ROCK);
+            disc(world, cx, floorY - 2, cz, r - 4, ROCK);
+            disc(world, cx, floorY - 3, cz, r - 8, DEEP_ROCK);
+            disc(world, cx, floorY - 4, cz, r - 13, DEEP_ROCK);
+        }
 
         // Floor, with concentric rings so the space reads clearly.
         disc(world, cx, floorY, cz, r, ARENA_FLOOR);

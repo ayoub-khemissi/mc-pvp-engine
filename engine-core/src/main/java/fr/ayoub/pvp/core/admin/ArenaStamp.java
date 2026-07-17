@@ -15,8 +15,9 @@ import java.util.Map;
  * Stamps the full development arena into the air above a chosen block.
  *
  * <p>On an imported map the scenery is the good part; its floor is not. So rather than fight on it,
- * this drops the engine's own arena — the same one {@code /pvpadmin setup} builds, floating island
- * and ringed floor and railed rim with its invisible wall and eight lit lamp posts — a few blocks
+ * this drops the engine's own arena — the ringed floor and railed rim with its invisible wall and
+ * eight lit lamp posts that {@code /pvpadmin setup} builds (minus the floating island, which just
+ * dangles under a floating platform) — a few blocks
  * <b>above</b> the block you point at. Nothing below is touched: the arena floats over the decor,
  * which frames the fight without being part of it.
  *
@@ -32,8 +33,7 @@ public final class ArenaStamp {
     /**
      * Build the arena at an anchor and write its {@code map.yml}.
      *
-     * @param floorY the Y of the platform floor — the caller lifts it above the pointed block so the
-     *               floating island underneath still clears the decor
+     * @param floorY the Y of the platform floor — the caller lifts it above the pointed block
      */
     public static void stamp(World world, int cx, int floorY, int cz,
                              String id, List<String> modes, File mapsFolder) throws IOException {
@@ -58,7 +58,7 @@ public final class ArenaStamp {
         // roof, a pillar, a wall of the building it sits in — is gone before the floor goes down.
         clear(world, minX, minY, minZ, maxX, maxY, maxZ);
 
-        WorldSetup.buildArena(world, cx, floorY, cz);
+        WorldSetup.buildArena(world, cx, floorY, cz, false);   // no floating island — see WorldSetup
 
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("id", id);
