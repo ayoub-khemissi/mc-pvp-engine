@@ -37,11 +37,23 @@ public final class ArenaStamp {
      */
     public static void stamp(World world, int cx, int floorY, int cz,
                              String id, List<String> modes, File mapsFolder) throws IOException {
-        WorldSetup.buildArena(world, cx, floorY, cz);
-
         int r = WorldSetup.ARENA_FLOOR_RADIUS;
         int pad = WorldSetup.TEAM_PAD_OFFSET;
         int height = WorldSetup.ARENA_CEILING - WorldSetup.ARENA_Y;
+
+        // The box the arena lives in — a generous margin around it and headroom above the wall.
+        int minX = cx - r - 2;
+        int maxX = cx + r + 2;
+        int minZ = cz - r - 2;
+        int maxZ = cz + r + 2;
+        int minY = floorY - 5;                                   // below the floating island
+        int maxY = floorY + WorldSetup.WALL_HEIGHT + 10;         // above the wall, room to fight
+
+        // Carve it out first: clear everything inside, so any decor that pokes into the arena — a
+        // roof, a pillar, a wall of the building it sits in — is gone before the floor goes down.
+        clear(world, minX, minY, minZ, maxX, maxY, maxZ);
+
+        WorldSetup.buildArena(world, cx, floorY, cz);
 
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("id", id);
@@ -60,19 +72,34 @@ public final class ArenaStamp {
         yaml.set("bounds.min-y", (double) floorY);
         yaml.set("bounds.max-y", (double) floorY + height);
 
-        // The reset box hugs the arena — down to just below the island, up past the wall — so it
-        // never reaches the decor below, whatever the lift.
+        // The reset box IS the carved box, so a match restores the arena and the empty pocket it
+        // sits in exactly as they were stamped — and never touches the decor outside it.
         Map<String, Object> box = new LinkedHashMap<>();
-        box.put("min-x", cx - r - 2);
-        box.put("min-y", floorY - 5);
-        box.put("min-z", cz - r - 2);
-        box.put("max-x", cx + r + 2);
-        box.put("max-y", floorY + WorldSetup.WALL_HEIGHT + 2);
-        box.put("max-z", cz + r + 2);
+        box.put("min-x", minX);
+        box.put("min-y", minY);
+        box.put("min-z", minZ);
+        box.put("max-x", maxX);
+        box.put("max-y", maxY);
+        box.put("max-z", maxZ);
         yaml.set("reset", List.of(box));
 
         mapsFolder.mkdirs();
         yaml.save(new File(mapsFolder, id + ".yml"));
+    }
+
+    /** Empty a box to air, so the arena is built into a clean pocket rather than through decor. */
+    private static void clear(World world, int minX, int minY, int minZ,
+                              int maxX, int maxY, int maxZ) {
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    org.bukkit.block.Block block = world.getBlockAt(x, y, z);
+                    if (!block.getType().isAir()) {
+                        block.setType(org.bukkit.Material.AIR, false);
+                    }
+                }
+            }
+        }
     }
 
     /** Three spawn points in a line, centred on the pad. */
