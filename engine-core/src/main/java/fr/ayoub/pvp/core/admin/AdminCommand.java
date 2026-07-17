@@ -299,6 +299,38 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
                 Integer lift = args.length > 3 ? tryInt(args[3]) : null;
                 plugin.arenaStamper().give(player, args[2], lift);
             }
+            case "stampat" -> {
+                // Stamp from coordinates (console-friendly, for batch placement):
+                //   /pvpadmin arena stampat <world> <id> <x> <floorY> <z>
+                if (args.length < 7) {
+                    send(sender, "Usage: /pvpadmin arena stampat <world> <id> <x> <floorY> <z>",
+                            NamedTextColor.RED);
+                    return;
+                }
+                World w = Bukkit.getWorld(args[2]);
+                if (w == null) {
+                    send(sender, "World '" + args[2] + "' is not loaded.", NamedTextColor.RED);
+                    return;
+                }
+                Integer x = tryInt(args[4]);
+                Integer y = tryInt(args[5]);
+                Integer z = tryInt(args[6]);
+                if (x == null || y == null || z == null) {
+                    send(sender, "x, floorY and z must be whole numbers.", NamedTextColor.RED);
+                    return;
+                }
+                try {
+                    fr.ayoub.pvp.core.admin.ArenaStamp.stamp(w, x, y, z, args[3],
+                            java.util.List.of("duel"), new java.io.File(plugin.getDataFolder(), "maps"));
+                } catch (java.io.IOException e) {
+                    send(sender, "Could not write the map file: " + e.getMessage(), NamedTextColor.RED);
+                    return;
+                }
+                arenas.load(ArenaLoader.loadAll(plugin));
+                plugin.resets().prepare(arenas.all());
+                send(sender, "Stamped '" + args[3] + "' at " + x + " " + y + " " + z + " in "
+                        + args[2] + ".", NamedTextColor.GREEN);
+            }
             case "remove" -> {
                 if (args.length < 3) {
                     send(sender, "Usage: /pvpadmin arena remove <id>", NamedTextColor.RED);
