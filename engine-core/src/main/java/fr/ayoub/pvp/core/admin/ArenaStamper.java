@@ -33,14 +33,16 @@ import java.util.UUID;
  */
 public final class ArenaStamper implements Listener {
 
-    /** How far above the pointed block the platform floats, so the decor is left alone. */
-    private static final int DEFAULT_LIFT = 4;
-    private static final int DEFAULT_RADIUS = 12;
+    /**
+     * How far above the pointed block the platform floats. Six clears the arena's floating island
+     * (four blocks deep) with a gap, so nothing of the decor below is touched.
+     */
+    private static final int DEFAULT_LIFT = 6;
 
     private final PvPEnginePlugin plugin;
     private final NamespacedKey wandKey;
 
-    private record Pending(String id, int radius, int lift) {
+    private record Pending(String id, int lift) {
     }
 
     private final Map<UUID, Pending> pending = new HashMap<>();
@@ -51,10 +53,9 @@ public final class ArenaStamper implements Listener {
     }
 
     /** Give the player a wand primed to stamp arena {@code id}. */
-    public void give(Player player, String id, Integer radius, Integer lift) {
-        int r = radius != null ? radius : DEFAULT_RADIUS;
+    public void give(Player player, String id, Integer lift) {
         int l = lift != null ? lift : DEFAULT_LIFT;
-        pending.put(player.getUniqueId(), new Pending(id, r, l));
+        pending.put(player.getUniqueId(), new Pending(id, l));
 
         ItemStack wand = new ItemStack(Material.BLAZE_ROD);
         wand.editMeta(meta -> {
@@ -65,8 +66,7 @@ public final class ArenaStamper implements Listener {
         player.getInventory().addItem(wand);
 
         player.sendMessage(Component.text("Point at a block and right-click: the '" + id
-                + "' arena (radius " + r + ") appears " + l + " blocks above it.",
-                NamedTextColor.GREEN));
+                + "' arena appears " + l + " blocks above it.", NamedTextColor.GREEN));
     }
 
     @EventHandler
@@ -93,7 +93,7 @@ public final class ArenaStamper implements Listener {
         int floorY = block.getY() + p.lift();
 
         try {
-            ArenaStamp.stamp(block.getWorld(), block.getX(), floorY, block.getZ(), p.radius(),
+            ArenaStamp.stamp(block.getWorld(), block.getX(), floorY, block.getZ(),
                     p.id(), List.of("duel"), new File(plugin.getDataFolder(), "maps"));
         } catch (IOException e) {
             player.sendMessage(Component.text("Could not write the map file: " + e.getMessage(),

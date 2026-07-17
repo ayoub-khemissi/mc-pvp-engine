@@ -40,6 +40,9 @@ public final class WorldSetup {
     public static final int ARENA_Y = 64;
     public static final int ARENA_FLOOR_RADIUS = 20;
 
+    /** How far either side of centre the team pads (and spawns) sit. */
+    public static final int TEAM_PAD_OFFSET = 12;
+
     /** Height of the invisible barrier wall. Far beyond any jump or knockback. */
     public static final int WALL_HEIGHT = 10;
 
@@ -233,25 +236,40 @@ public final class WorldSetup {
 
     private static void buildArena(World world, int index) {
         int cx = arenaCenterX(index);
-        int y = ARENA_Y;
         int r = ARENA_FLOOR_RADIUS;
 
-        // Wipe first — see buildLobby.
+        // Wipe first — see buildLobby. Only the grid arenas do this; a stamped one floats in the
+        // air over decor it must not touch, so it clears nothing.
         clear(world,
-                cx - r - 4, y - 8, -r - 4,
-                cx + r + 4, y + WALL_HEIGHT + 10, r + 4);
+                cx - r - 4, ARENA_Y - 8, -r - 4,
+                cx + r + 4, ARENA_Y + WALL_HEIGHT + 10, r + 4);
+
+        buildArena(world, cx, ARENA_Y, 0);
+    }
+
+    /**
+     * The whole arena — floating island, ringed floor, railed rim with its invisible wall, eight lit
+     * lamp posts, the two team pads — built at an anchor, with no clearing.
+     *
+     * <p>Parameterised so it is not tied to the fixed grid: the stamp wand drops this exact arena a
+     * few blocks above a block you point at, so an imported map keeps its scenery and gains a clean,
+     * detailed floor to fight on. The centre floor is at {@code floorY}; the team pads sit at
+     * {@link #TEAM_PAD_OFFSET} either side of it, which is where the spawns go.
+     */
+    public static void buildArena(World world, int cx, int floorY, int cz) {
+        int r = ARENA_FLOOR_RADIUS;
 
         // Floating island underneath.
-        disc(world, cx, y - 1, 0, r - 1, ROCK);
-        disc(world, cx, y - 2, 0, r - 4, ROCK);
-        disc(world, cx, y - 3, 0, r - 8, DEEP_ROCK);
-        disc(world, cx, y - 4, 0, r - 13, DEEP_ROCK);
+        disc(world, cx, floorY - 1, cz, r - 1, ROCK);
+        disc(world, cx, floorY - 2, cz, r - 4, ROCK);
+        disc(world, cx, floorY - 3, cz, r - 8, DEEP_ROCK);
+        disc(world, cx, floorY - 4, cz, r - 13, DEEP_ROCK);
 
         // Floor, with concentric rings so the space reads clearly.
-        disc(world, cx, y, 0, r, ARENA_FLOOR);
-        ring(world, cx, y, 0, 16, 18, ARENA_RING);
-        ring(world, cx, y, 0, 10, 11, ARENA_RING);
-        disc(world, cx, y, 0, 3, ARENA_CENTER);
+        disc(world, cx, floorY, cz, r, ARENA_FLOOR);
+        ring(world, cx, floorY, cz, 16, 18, ARENA_RING);
+        ring(world, cx, floorY, cz, 10, 11, ARENA_RING);
+        disc(world, cx, floorY, cz, 3, ARENA_CENTER);
 
         // The rim: stone brick floor, a visible railing, and the invisible wall above.
         for (int dx = -r; dx <= r; dx++) {
@@ -259,10 +277,10 @@ public final class WorldSetup {
                 if (!inDisc(dx, dz, r) || !isRim(dx, dz, r)) {
                     continue;
                 }
-                set(world, cx + dx, y, dz, PILLAR);
-                set(world, cx + dx, y + 1, dz, RAIL);
+                set(world, cx + dx, floorY, cz + dz, PILLAR);
+                set(world, cx + dx, floorY + 1, cz + dz, RAIL);
                 for (int h = 2; h <= WALL_HEIGHT + 1; h++) {
-                    set(world, cx + dx, y + h, dz, WALL);
+                    set(world, cx + dx, floorY + h, cz + dz, WALL);
                 }
             }
         }
@@ -271,13 +289,13 @@ public final class WorldSetup {
         for (int i = 0; i < 8; i++) {
             double angle = Math.PI * 2 * i / 8;
             int px = cx + (int) Math.round(Math.cos(angle) * 17);
-            int pz = (int) Math.round(Math.sin(angle) * 17);
-            lampPost(world, px, y, pz, 3);
+            int pz = cz + (int) Math.round(Math.sin(angle) * 17);
+            lampPost(world, px, floorY, pz, 3);
         }
 
         // Team pads, so you instantly know which side you are on.
-        disc(world, cx - 12, y, 0, 2, TEAM_0_PAD);
-        disc(world, cx + 12, y, 0, 2, TEAM_1_PAD);
+        disc(world, cx - TEAM_PAD_OFFSET, floorY, cz, 2, TEAM_0_PAD);
+        disc(world, cx + TEAM_PAD_OFFSET, floorY, cz, 2, TEAM_1_PAD);
     }
 
     // ---------------------------------------------------------------------------

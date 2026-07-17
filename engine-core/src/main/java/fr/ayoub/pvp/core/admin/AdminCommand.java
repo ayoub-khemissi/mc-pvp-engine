@@ -293,12 +293,11 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
                     return;
                 }
                 if (args.length < 3) {
-                    send(sender, "Usage: /pvpadmin arena stamp <id> [radius] [lift]", NamedTextColor.RED);
+                    send(sender, "Usage: /pvpadmin arena stamp <id> [lift]", NamedTextColor.RED);
                     return;
                 }
-                Integer radius = args.length > 3 ? tryInt(args[3]) : null;
-                Integer lift = args.length > 4 ? tryInt(args[4]) : null;
-                plugin.arenaStamper().give(player, args[2], radius, lift);
+                Integer lift = args.length > 3 ? tryInt(args[3]) : null;
+                plugin.arenaStamper().give(player, args[2], lift);
             }
             default -> usage(sender);
         }
