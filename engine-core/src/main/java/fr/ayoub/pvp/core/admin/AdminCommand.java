@@ -53,6 +53,8 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
             case "setup" -> setup(sender, args);
             case "arena" -> arena(sender, args);
             case "mode" -> mode(sender, args);
+            case "world" -> world(sender, args);
+            case "map" -> map(sender, args);
             default -> usage(sender);
         }
         return true;
@@ -96,6 +98,192 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
         }
         send(sender, "Mode '" + args[2] + "' is now " + (enable ? "enabled" : "disabled")
                 + ". (config.yml still decides on restart.)", NamedTextColor.GREEN);
+    }
+
+    /** Maps being defined right now, one per admin. */
+    private final java.util.Map<java.util.UUID, MapDraft> drafts = new java.util.HashMap<>();
+
+    /**
+     * Turn a hand-made arena into a playable map by stamping its markers in game.
+     *
+     *   /pvpadmin map new &lt;id&gt;       start a map in the world you are standing in
+     *   /pvpadmin map spawn &lt;0|1&gt;    set a team's spawn at your feet, facing where you look
+     *   /pvpadmin map corner &lt;1|2&gt;   set a bounds corner at your position
+     *   /pvpadmin map modes &lt;a,b&gt;    which modes may play here (default: duel)
+     *   /pvpadmin map info            what is still missing
+     *   /pvpadmin map save            write the map.yml and load it as an arena
+     *   /pvpadmin map cancel          throw the draft away
+     *
+     * The two corners are both the invisible wall AND the box the engine resets between matches,
+     * so an arena you define this way is decay-proof for free.
+     */
+    private void map(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            send(sender, "Stand in the arena — this is a player command.", NamedTextColor.RED);
+            return;
+        }
+        if (args.length < 2) {
+            send(sender, "Usage: /pvpadmin map new|spawn|corner|modes|info|save|cancel",
+                    NamedTextColor.RED);
+            return;
+        }
+
+        java.util.UUID who = player.getUniqueId();
+
+        switch (args[1].toLowerCase()) {
+            case "new" -> {
+                if (args.length < 3) {
+                    send(sender, "Usage: /pvpadmin map new <id>", NamedTextColor.RED);
+                    return;
+                }
+                drafts.put(who, new MapDraft(args[2], player.getWorld().getName()));
+                send(sender, "Started map '" + args[2] + "' in world '"
+                        + player.getWorld().getName() + "'. Now mark: spawn 0, spawn 1, corner 1,"
+                        + " corner 2.", NamedTextColor.GREEN);
+            }
+            case "spawn" -> withDraft(player, draft -> {
+                int team = args.length > 2 && args[2].equals("1") ? 1 : 0;
+                int n = draft.addSpawn(team, player.getLocation());
+                send(sender, "Added spawn #" + n + " for team " + team + " (facing "
+                        + facing(player) + "). Add more for 2v2/3v3, or the other team. "
+                        + remaining(draft), NamedTextColor.GREEN);
+            });
+            case "clearspawns" -> withDraft(player, draft -> {
+                int team = args.length > 2 && args[2].equals("1") ? 1 : 0;
+                draft.clearSpawns(team);
+                send(sender, "Cleared team " + team + "'s spawns. " + remaining(draft),
+                        NamedTextColor.YELLOW);
+            });
+            case "corner" -> withDraft(player, draft -> {
+                int which = args.length > 2 && args[2].equals("2") ? 2 : 1;
+                draft.setCorner(which, player.getLocation());
+                send(sender, "Corner " + which + " set at " + coords(player.getLocation())
+                        + ". " + remaining(draft), NamedTextColor.GREEN);
+            });
+            case "modes" -> withDraft(player, draft -> {
+                if (args.length < 3) {
+                    send(sender, "Usage: /pvpadmin map modes <id,id>", NamedTextColor.RED);
+                    return;
+                }
+                draft.setModes(java.util.List.of(args[2].split(",")));
+                send(sender, "Modes set: " + args[2], NamedTextColor.GREEN);
+            });
+            case "info" -> withDraft(player, draft ->
+                    send(sender, "Map '" + draft.id() + "': " + remaining(draft), NamedTextColor.GOLD));
+            case "cancel" -> {
+                drafts.remove(who);
+                send(sender, "Draft thrown away.", NamedTextColor.YELLOW);
+            }
+            case "save" -> withDraft(player, draft -> saveDraft(sender, who, draft));
+            default -> send(sender, "Usage: /pvpadmin map new|spawn|corner|modes|info|save|cancel",
+                    NamedTextColor.RED);
+        }
+    }
+
+    private void withDraft(Player player, java.util.function.Consumer<MapDraft> action) {
+        MapDraft draft = drafts.get(player.getUniqueId());
+        if (draft == null) {
+            send(player, "No map in progress. Start one: /pvpadmin map new <id>", NamedTextColor.RED);
+            return;
+        }
+        action.accept(draft);
+    }
+
+    private void saveDraft(CommandSender sender, java.util.UUID who, MapDraft draft) {
+        if (!draft.isReady()) {
+            send(sender, "Not yet — still need: " + String.join(", ", draft.missing()),
+                    NamedTextColor.RED);
+            return;
+        }
+        try {
+            draft.save(new java.io.File(plugin.getDataFolder(), "maps"));
+        } catch (java.io.IOException e) {
+            send(sender, "Could not write the map file: " + e.getMessage(), NamedTextColor.RED);
+            return;
+        }
+
+        drafts.remove(who);
+        arenas.load(ArenaLoader.loadAll(plugin));
+        plugin.resets().prepare(arenas.all());   // photograph the new arena for future resets
+
+        send(sender, "Saved '" + draft.id() + "' and loaded it. Queue a duel to test it.",
+                NamedTextColor.GREEN);
+    }
+
+    private static String remaining(MapDraft draft) {
+        return draft.isReady()
+                ? "Ready — /pvpadmin map save."
+                : "Still need: " + String.join(", ", draft.missing()) + ".";
+    }
+
+    private static String facing(Player player) {
+        float yaw = player.getLocation().getYaw();
+        return String.format("yaw %.0f", yaw);
+    }
+
+    /**
+     * Load a hand-made world and drop into it, for building and testing a designer's map.
+     *
+     *   /pvpadmin world load &lt;name&gt;   load the world folder &lt;name&gt; and teleport in (creative)
+     *   /pvpadmin world tp   &lt;name&gt;   teleport to an already-loaded world
+     *   /pvpadmin world list            every loaded world
+     *
+     * Editing a map is done here, in game: fly around in creative and place what you need
+     * (chests, spawn markers). It is already on the server, so there is nothing to re-import.
+     */
+    private void world(CommandSender sender, String[] args) {
+        if (args.length < 2 || args[1].equalsIgnoreCase("list")) {
+            send(sender, "Loaded worlds:", NamedTextColor.GOLD);
+            Bukkit.getWorlds().forEach(w -> send(sender, " " + w.getName(), NamedTextColor.GRAY));
+            return;
+        }
+        if (args.length < 3) {
+            send(sender, "Usage: /pvpadmin world load|tp <name>", NamedTextColor.RED);
+            return;
+        }
+
+        String name = args[2];
+
+        if (args[1].equalsIgnoreCase("load")) {
+            if (Bukkit.getWorld(name) != null) {
+                send(sender, "'" + name + "' is already loaded.", NamedTextColor.YELLOW);
+            } else if (!new java.io.File(Bukkit.getWorldContainer(), name).isDirectory()) {
+                send(sender, "No world folder called '" + name + "' next to the server jar.",
+                        NamedTextColor.RED);
+                return;
+            } else {
+                send(sender, "Loading '" + name + "' — a hand-made world may be upgraded from an "
+                        + "older version, which can take a moment…", NamedTextColor.GRAY);
+                World created = new org.bukkit.WorldCreator(name).createWorld();
+                if (created == null) {
+                    send(sender, "Could not load '" + name + "'. See the console.", NamedTextColor.RED);
+                    return;
+                }
+            }
+        }
+
+        World world = Bukkit.getWorld(name);
+        if (world == null) {
+            send(sender, "'" + name + "' is not loaded. Try: /pvpadmin world load " + name,
+                    NamedTextColor.RED);
+            return;
+        }
+
+        // Loading from the console is enough for `load`; only the teleport needs a body.
+        if (!(sender instanceof Player player)) {
+            send(sender, "'" + name + "' is loaded, spawn " + coords(world.getSpawnLocation())
+                    + ". Run 'world tp " + name + "' in game to go there.", NamedTextColor.GREEN);
+            return;
+        }
+
+        player.teleport(world.getSpawnLocation());
+        player.setGameMode(org.bukkit.GameMode.CREATIVE);
+        send(sender, "In '" + name + "' at spawn " + coords(world.getSpawnLocation())
+                + " — creative. Fly around; place chests where you want them.", NamedTextColor.GREEN);
+    }
+
+    private static String coords(org.bukkit.Location at) {
+        return at.getBlockX() + " " + at.getBlockY() + " " + at.getBlockZ();
     }
 
     /**
@@ -212,6 +400,7 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
             out.add("setup");
             out.add("arena");
             out.add("mode");
+            out.add("world");
             out.add("reload");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("arena")) {
             out.add("list");
@@ -221,6 +410,12 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
             out.add("list");
             out.add("enable");
             out.add("disable");
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("world")) {
+            out.add("load");
+            out.add("tp");
+            out.add("list");
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("world")) {
+            Bukkit.getWorlds().forEach(w -> out.add(w.getName()));
         } else if (args.length == 3 && args[1].equalsIgnoreCase("tp")) {
             arenas.all().forEach(arena -> out.add(arena.id()));
         } else if (args.length == 3 && args[0].equalsIgnoreCase("mode")) {

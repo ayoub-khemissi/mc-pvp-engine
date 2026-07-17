@@ -274,6 +274,20 @@ public final class Match implements MatchContext {
         return arena.spawn(team);
     }
 
+    /**
+     * Where <b>this player</b> spawns: their team's spawn point at their position within the team.
+     *
+     * <p>So the three members of a 3v3 team land on three different points, not on top of each
+     * other. The position in the team is just their index in its member list, which is stable for
+     * the match.
+     */
+    public Location spawnFor(Player player) {
+        return teamOf(player)
+                .map(team -> arena.spawn(team.index(),
+                        Math.max(0, team.members().indexOf(player.getUniqueId()))))
+                .orElseGet(() -> arena.spawn(0, 0));
+    }
+
     @Override
     public String arenaId() {
         return arena.id();

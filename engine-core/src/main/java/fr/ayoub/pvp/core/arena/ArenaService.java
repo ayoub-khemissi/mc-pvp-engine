@@ -24,6 +24,7 @@ import java.util.UUID;
 public final class ArenaService {
 
     private final Map<String, Arena> arenas = new HashMap<>();
+    private final java.util.Random random = new java.util.Random();
     private final Set<String> busy = new HashSet<>();
     private final Map<UUID, Arena> playerArena = new HashMap<>();
 
@@ -56,10 +57,20 @@ public final class ArenaService {
 
         List<MapDescriptor> descriptors = free.stream().map(Arena::descriptor).toList();
 
-        return ArenaSelector.select(descriptors, mode.id(), averageRating, mode.requiresDedicatedMap())
-                .flatMap(chosen -> free.stream()
-                        .filter(arena -> arena.id().equals(chosen.id()))
-                        .findFirst())
+        // Every eligible free map, then one at RANDOM — so a run of matches cycles through the
+        // arenas instead of always landing on whichever sorts first. When rating bands matter this
+        // still only ranges over the maps that fit; here, with fifteen any-rating duel arenas, it
+        // ranges over all fifteen.
+        List<MapDescriptor> candidates = ArenaSelector.candidates(
+                descriptors, mode.id(), averageRating, mode.requiresDedicatedMap());
+        if (candidates.isEmpty()) {
+            return Optional.empty();
+        }
+
+        MapDescriptor chosen = candidates.get(random.nextInt(candidates.size()));
+        return free.stream()
+                .filter(arena -> arena.id().equals(chosen.id()))
+                .findFirst()
                 .map(arena -> {
                     busy.add(arena.id());
                     return arena;

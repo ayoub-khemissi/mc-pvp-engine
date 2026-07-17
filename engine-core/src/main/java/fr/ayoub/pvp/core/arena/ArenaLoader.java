@@ -70,10 +70,10 @@ public final class ArenaLoader {
         }
 
         Region bounds = RegionParser.parse(boundsOf(yaml));
-        List<Location> spawns = spawnsOf(yaml, world);
+        List<List<Location>> spawns = spawnsOf(yaml, world);
 
         if (spawns.size() < 2) {
-            throw new IllegalArgumentException("a map needs at least 2 team spawns, found " + spawns.size());
+            throw new IllegalArgumentException("a map needs at least 2 teams, found " + spawns.size());
         }
 
         // Optional. No 'modes' = any mode. No 'rating' = any rating.
@@ -171,26 +171,57 @@ public final class ArenaLoader {
         return section.getValues(false);
     }
 
-    private static List<Location> spawnsOf(YamlConfiguration yaml, World world) {
+    /**
+     * The spawns, per team — and a team may have <b>several</b>, so a 3v3 does not stack everyone on
+     * one block. Each {@code team-N} is written either as a single point (the old format, still
+     * read) or as a list of them:
+     *
+     * <pre>
+     * spawns:
+     *   team-0: {x, y, z, yaw, pitch}          # one point
+     *   team-1:                                 # or several
+     *     - {x, y, z, yaw, pitch}
+     *     - {x, y, z, yaw, pitch}
+     * </pre>
+     */
+    private static List<List<Location>> spawnsOf(YamlConfiguration yaml, World world) {
         ConfigurationSection section = yaml.getConfigurationSection("spawns");
         if (section == null) {
             throw new IllegalArgumentException("missing 'spawns'");
         }
 
-        List<Location> spawns = new ArrayList<>();
+        List<List<Location>> spawns = new ArrayList<>();
         for (int team = 0; ; team++) {
-            ConfigurationSection spawn = section.getConfigurationSection("team-" + team);
-            if (spawn == null) {
+            String key = "team-" + team;
+
+            if (section.isList(key)) {
+                List<Location> points = new ArrayList<>();
+                for (Map<?, ?> point : section.getMapList(key)) {
+                    points.add(location(world, point));
+                }
+                if (points.isEmpty()) {
+                    throw new IllegalArgumentException(key + " is an empty list of spawns");
+                }
+                spawns.add(points);
+            } else if (section.getConfigurationSection(key) != null) {
+                ConfigurationSection spawn = section.getConfigurationSection(key);
+                spawns.add(List.of(new Location(world,
+                        spawn.getDouble("x"), spawn.getDouble("y"), spawn.getDouble("z"),
+                        (float) spawn.getDouble("yaw"), (float) spawn.getDouble("pitch"))));
+            } else {
                 break;
             }
-            spawns.add(new Location(
-                    world,
-                    spawn.getDouble("x"),
-                    spawn.getDouble("y"),
-                    spawn.getDouble("z"),
-                    (float) spawn.getDouble("yaw"),
-                    (float) spawn.getDouble("pitch")));
         }
         return spawns;
+    }
+
+    private static Location location(World world, Map<?, ?> at) {
+        return new Location(world,
+                asDouble(at.get("x")), asDouble(at.get("y")), asDouble(at.get("z")),
+                (float) asDouble(at.get("yaw")), (float) asDouble(at.get("pitch")));
+    }
+
+    private static double asDouble(Object value) {
+        return value instanceof Number number ? number.doubleValue() : 0;
     }
 }

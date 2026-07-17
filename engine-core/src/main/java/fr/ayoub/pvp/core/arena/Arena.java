@@ -21,7 +21,7 @@ import java.util.Optional;
  * A playable area: where each team spawns, the invisible wall around it, and what it
  * is for ({@link MapDescriptor}: which modes, which rating band).
  */
-public record Arena(MapDescriptor descriptor, World world, List<Location> spawns,
+public record Arena(MapDescriptor descriptor, World world, List<List<Location>> spawns,
                     Region bounds, Map<String, Location> markers, Render render,
                     List<Volume> reset) {
 
@@ -46,7 +46,7 @@ public record Arena(MapDescriptor descriptor, World world, List<Location> spawns
     }
 
     public Arena {
-        spawns = List.copyOf(spawns);
+        spawns = spawns.stream().map(List::copyOf).toList();
         markers = Map.copyOf(markers);
         reset = List.copyOf(reset);
     }
@@ -71,8 +71,21 @@ public record Arena(MapDescriptor descriptor, World world, List<Location> spawns
         return spawns.size();
     }
 
+    /**
+     * Where the {@code index}-th player of a team appears.
+     *
+     * <p>A team may have several spawn points, so a 3v3 does not stack three fighters on one block.
+     * If there are fewer points than players, they wrap — worst case, two share a point, which is
+     * still better than three on one. Both team and index wrap, so nothing here can go out of range.
+     */
+    public Location spawn(int team, int index) {
+        List<Location> points = spawns.get(Math.floorMod(team, spawns.size()));
+        return points.get(Math.floorMod(index, points.size())).clone();
+    }
+
+    /** The team's first spawn point — for callers that place a whole team, or admin teleports. */
     public Location spawn(int team) {
-        return spawns.get(Math.floorMod(team, spawns.size())).clone();
+        return spawn(team, 0);
     }
 
     public Location center() {

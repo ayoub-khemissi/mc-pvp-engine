@@ -208,7 +208,7 @@ public final class MatchService {
                 }
 
                 plugin.arenas().enter(player, match.arena());
-                player.teleport(match.spawn(team.index()));
+                player.teleport(match.spawnFor(player));
                 player.setGameMode(gameMode);
                 player.getInventory().clear();
                 player.getInventory().setArmorContents(null);
@@ -466,7 +466,7 @@ public final class MatchService {
         if (match.mode().rules().roamWhileDead()) {
             victim.teleport(grave);
         } else {
-            match.teamOf(victim).ifPresent(team -> victim.teleport(match.spawn(team.index())));
+            victim.teleport(match.spawnFor(victim));
             Freeze.apply(victim);
         }
 
@@ -489,7 +489,7 @@ public final class MatchService {
 
                 Freeze.release(victim);   // whatever held them while they were dead
                 victim.setGameMode(GameMode.SURVIVAL);
-                victim.teleport(match.spawn(team.index()));
+                victim.teleport(match.spawnFor(victim));
                 victim.setHealth(20);
                 victim.setFoodLevel(20);
                 victim.setFireTicks(0);
@@ -710,7 +710,7 @@ public final class MatchService {
 
         match.revive(player.getUniqueId());
 
-        player.teleport(match.spawn(team.get().index()));
+        player.teleport(match.spawnFor(player));
         player.setHealth(20);
         player.setFoodLevel(20);
         player.getInventory().clear();

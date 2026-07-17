@@ -21,6 +21,42 @@ class ArenaSelectorTest {
         return new MapDescriptor(id, modes, minRating, maxRating);
     }
 
+    @Test
+    void candidatesAreEveryEligibleMapNotJustTheBestOne() {
+        // Fifteen any-rating duel arenas: all fifteen are candidates, so a caller can pick at random.
+        List<MapDescriptor> maps = List.of(
+                map("a", Set.of("duel"), 0, Integer.MAX_VALUE),
+                map("b", Set.of("duel"), 0, Integer.MAX_VALUE),
+                map("c", Set.of("dodgeball"), 0, Integer.MAX_VALUE));
+
+        List<MapDescriptor> candidates = ArenaSelector.candidates(maps, "duel", 1000, false);
+
+        assertEquals(2, candidates.size());
+        assertTrue(candidates.stream().anyMatch(m -> m.id().equals("a")));
+        assertTrue(candidates.stream().anyMatch(m -> m.id().equals("b")));
+    }
+
+    @Test
+    void candidatesNarrowToTheRatingBandWhenOneFits() {
+        List<MapDescriptor> maps = List.of(
+                map("bronze", Set.of("duel"), 0, 999),
+                map("gold", Set.of("duel"), 1000, 1999),
+                map("generic", Set.of("duel"), 0, Integer.MAX_VALUE));
+
+        // A 1500 player: gold and generic both fit; bronze does not.
+        List<MapDescriptor> candidates = ArenaSelector.candidates(maps, "duel", 1500, false);
+
+        assertEquals(2, candidates.size());
+        assertTrue(candidates.stream().noneMatch(m -> m.id().equals("bronze")));
+    }
+
+    @Test
+    void noCandidatesWhenNothingHostsTheMode() {
+        List<MapDescriptor> maps = List.of(map("a", Set.of("dodgeball"), 0, Integer.MAX_VALUE));
+
+        assertTrue(ArenaSelector.candidates(maps, "duel", 1000, false).isEmpty());
+    }
+
     /** A map with no restrictions at all. */
     private static MapDescriptor anyMap(String id) {
         return new MapDescriptor(id, Set.of(), 0, Integer.MAX_VALUE);
